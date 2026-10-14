@@ -2,8 +2,8 @@
 title: Decide — capability control model (profiles vs profiles + always-ask)
 type: wayfinder:grilling
 blocked-by:
-- 002-research-build-vs-opencode-plugins.md
-- 003-research-tracker-adapters-and-permissions.md
+- closed/002-research-build-vs-opencode-plugins.md
+- closed/003-research-tracker-adapters-and-permissions.md
 ---
 
 ## Question

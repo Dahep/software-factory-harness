@@ -2,8 +2,8 @@
 title: Decide — harness implementation language
 type: wayfinder:grilling
 blocked-by:
-- 001-research-harness-language.md
-- 002-research-build-vs-opencode-plugins.md
+- closed/001-research-harness-language.md
+- closed/002-research-build-vs-opencode-plugins.md
 ---
 
 ## Question

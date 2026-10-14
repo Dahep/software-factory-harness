@@ -34,6 +34,12 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 
 <!-- one line per closed ticket: title (URL/path) — gist -->
 
+- [Which implementation language for the Factory harness](closed/001-research-harness-language.md): Go recommended for the harness core; owners write workflow code in Starlark or via a subprocess/JSON interface; OCaml and TypeScript stay as escape hatches.
+- [Build on OpenCode + plugins, or own harness?](closed/002-research-build-vs-opencode-plugins.md): hybrid — Factory owns deterministic orchestration and uses OpenCode's embedded SDK as its first runtime behind a narrow adapter; Factory still builds durable run state, scheduling, approvals, tracker/PR integration, audit, recovery, execution isolation. Switching cost moderate if runtime state stays behind the adapter.
+- [Tracker adapter interface & permissions](closed/003-research-tracker-adapters-and-permissions.md): draft capability adapter with a GitHub/Fizzy/Linear support+permission matrix; a list of per-agent permissions (incl. merge-adjacent) the harness must enforce itself.
+- [Steer capture & observability](closed/004-research-steer-capture-observability.md): append-only, transcript-linked event log; OTel spans for timing/correlation only; privacy boundaries defined; evidence-linked mining with human approval; owner-facing run timeline.
+- [Software-factory landscape survey](closed/005-research-software-factory-landscape.md): comparison of MetaGPT, ChatDev, AutoGen/AG2, OpenAI/Anthropic writes, Devin, Cursor, Copilot, Jules, OpenHands, SWE-agent; recurring spaghetti-agents anti-patterns cataloged with adopt/avoid recommendations.
+
 ## Not yet specified
 
 - **Permission model for agents**: how profiles + always-ask interact with tracker permissions; exact autonomy levels. Hangs on harness decision (research-driven) and tracker research.

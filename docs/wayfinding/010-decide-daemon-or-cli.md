@@ -2,8 +2,8 @@
 title: Decide — resident daemon vs CLI/cron invocation model
 type: wayfinder:grilling
 blocked-by:
-- 002-research-build-vs-opencode-plugins.md
-- 005-research-software-factory-landscape.md
+- closed/002-research-build-vs-opencode-plugins.md
+- closed/005-research-software-factory-landscape.md
 ---
 
 ## Question
