@@ -27,6 +27,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
   11. Capability control: role profiles (a), leaning toward "profiles + always-ask for high-risk" (c) pending research.
   12. Daemon vs CLI: fetch both consumer models — sketch both in the spec, decide later.
   13. Project name: "Factory" for now.
+  14. Workflow code must be **typesafe, and functional where possible** (owner, 2026-10-16, via ticket 007); Starlark's untyped-Python shape is demoted from default. The workflow-language survey runs as ticket 011.
 - Inspirations to study: mattpocock/skills, T3 Code, paperclip, pi.dev.
 - All research agents dispatched at charting time are working in parallel; their results land in their ticket files.
 
@@ -39,6 +40,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 - [Tracker adapter interface & permissions](closed/003-research-tracker-adapters-and-permissions.md): draft capability adapter with a GitHub/Fizzy/Linear support+permission matrix; a list of per-agent permissions (incl. merge-adjacent) the harness must enforce itself.
 - [Steer capture & observability](closed/004-research-steer-capture-observability.md): append-only, transcript-linked event log; OTel spans for timing/correlation only; privacy boundaries defined; evidence-linked mining with human approval; owner-facing run timeline.
 - [Software-factory landscape survey](closed/005-research-software-factory-landscape.md): comparison of MetaGPT, ChatDev, AutoGen/AG2, OpenAI/Anthropic writes, Devin, Cursor, Copilot, Jules, OpenHands, SWE-agent; recurring spaghetti-agents anti-patterns cataloged with adopt/avoid recommendations. Amended 2026-10-14 (owner request): [Tessl](https://tessl.io) — the closed-source "context-driven factory" platform whose skills→loops→factory thesis challenges the code-defined-workflow premise, plus a five-system open-source factory sweep (AI Workflow, Open SWE, Vercel Foreman, gh-aw, agent-orchestrator; detail in `docs/research/oss-agent-factories-2026-10-14.md`) — no system yet combines multi-project scope, tracker neutrality, enforced capability control, and an authoritative issue→merge loop.
+- [Which language does the spec commit the harness to?](closed/007-decide-harness-language.md): **Go** for the harness core (ADR-0001 with reopen triggers); OpenCode-seam cost deferred to ticket 006; workflow-code constraint tightened to **typesafe + functional where possible**, Starlark demoted — survey runs as ticket 011.
 
 ## Not yet specified
 
@@ -47,7 +49,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 - **Observability schema**: what is recorded about every steer/tool call/file/network action, and how mining consumes it. Depends on harness decision.
 - **The deploy pipeline**: how a workflow declares "deploy to machines over SSH", multi-machine updates. Depends on language + daemon decision.
 - **Factory self-hosting loop**: how Factory manages itself (its own repo + tracker) and short-term self-tracking story. Fog until the first milestone's shape is firm.
-- **Workflow language ergonomics**: what writing a workflow actually looks like (libraries, primitives, composition). Depends heavily on language decision.
+- **Workflow language ergonomics**: what writing a workflow actually looks like (libraries, primitives, composition). The language-candidate survey runs as ticket 011; the ergonomics detail stays fog until the survey resolves and the first milestone's shape is firm.
 - **Path-to-other-users surface**: packaging, onboarding, config UI. Later.
 
 ## Out of scope
