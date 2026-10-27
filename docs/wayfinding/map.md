@@ -28,7 +28,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
   12. Daemon vs CLI: fetch both consumer models — sketch both in the spec, decide later.
   13. Project name: "Factory" for now.
   14. Workflow code must be **typesafe, and functional where possible** (owner, 2026-10-16, via ticket 007); Starlark's untyped-Python shape is demoted from default. The workflow-language survey runs as ticket 011.
-- Inspirations to study: mattpocock/skills, T3 Code, paperclip, pi.dev.
+- Inspirations to study: mattpocock/skills, T3 Code, paperclip, pi.dev, [Harness²](https://arxiv.org/abs/2610.14224) (recursive agent harnessing — ticket 012), [Swamp Club](https://swamp-club.com/) (behavior-centric AI — ticket 013; owner request 2026-10-27).
 - All research agents dispatched at charting time are working in parallel; their results land in their ticket files.
 
 ## Decisions so far
