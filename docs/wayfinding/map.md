@@ -53,7 +53,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 ## Not yet specified
 
 - **Permission model for agents**: how profiles + always-ask interact with tracker permissions; exact autonomy levels. Substrate is settled (closed/006: enforcement in adapter + minimal plugin; sandbox as capability); exact profiles belong to ticket 009.
-- **Where agents run**: local, remote worktrees, per-machine executors, sandboxing. Substrate settled (closed/006: worktrees are workspace separation, not sandboxes); the isolation design itself is still fog.
+- **Where agents run**: local, remote worktrees, per-machine executors, sandboxing. Substrate settled (closed/006: worktrees are workspace separation, not sandboxes). Owner direction 2026-11-18: sandboxing layer via **devvm**, plausibly one VM per workflow thread, secrets configured per project and injected by the sandbox — research runs as ticket 017; the isolation design graduates from this fog once it resolves.
 - **Observability schema**: what is recorded about every steer/tool call/file/network action, and how mining consumes it. 004 decided the log shape; the schema detail remains fog, now under the measure-everything directive (#15).
 - **The deploy pipeline**: how a workflow declares "deploy to machines over SSH", multi-machine updates. Depends on language + daemon decision.
 - **Path-to-other-users surface**: packaging, onboarding, config UI. Later.
