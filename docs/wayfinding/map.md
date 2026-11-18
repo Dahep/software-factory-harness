@@ -29,7 +29,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
   13. Project name: "Factory" for now.
   14. Workflow code must be **typesafe, and functional where possible** (owner, 2026-10-16, via ticket 007); Starlark's untyped-Python shape is demoted from default. The workflow-language survey runs as ticket 011.
   15. **Directive (owner, 2026-11-03): "If it is not measured, it is not improved."** Encode this everywhere in Factory: every workflow run, agent action, gate, and merge should emit measurable events; improvement activities (mining into skills/workflows, harness adaptation) must be driven by metrics, not vibes; benchmarks/evaluations are a first-class Factory concept, not an afterthought. Research tickets and design decisions must state what they'd measure.
-- Inspirations to study: mattpocock/skills, T3 Code, paperclip, pi.dev, [Harness²](https://arxiv.org/abs/2610.14224) (recursive agent harnessing — ticket 012), [Swamp Club](https://swamp-club.com/) (behavior-centric AI — ticket 013; owner request 2026-10-27).
+- Inspirations to study: mattpocock/skills, T3 Code, paperclip, pi.dev, [Harness²](https://arxiv.org/abs/2610.14224) (recursive agent harnessing — ticket 012), [Swamp Club](https://swamp-club.com/) (behavior-centric AI — ticket 013; owner request 2026-10-27), Claude Code Code Mode + Pi Codemode (code-as-composition — ticket 015, Swamp companion 2026-11-18).
 - All research agents dispatched at charting time are working in parallel; their results land in their ticket files.
 
 ## Decisions so far
