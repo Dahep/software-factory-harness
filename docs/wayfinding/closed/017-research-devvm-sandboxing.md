@@ -92,3 +92,14 @@ Verified against the current docs and source (`internal/secrets/custom.go`, `doc
 7. [devvm docs — Attack vectors](https://devvm.dev/docs/safety/attack-vectors/) — Blocked / Kept inside the VM / Narrowed / Left to you; minting-credential refusals; the 17-VM-era notes.
 8. Source repository `github.com/devvmhq/devvm` — MIT `LICENSE`, `VERSION` 0.1.1-rc.3, commit 8afdec7 (2026-11-18), `CHANGELOG.md` (0.1.1-rc.3 + Unreleased: 17-VM cap, split proxy with Landlock/seccomp on Linux, Cursor agent, `--clone` repo copy), `internal/secrets/custom.go`, `internal/secrets/yours.go` (custom secrets, ≤16 hosts, DefaultHeader), `docs/content/docs/safety/network.md` §Your own secrets. Clone of record: `/tmp/opencode/devvm-src` (shallow, not committed).
 9. **Local CLI evidence** (0.1.0 via mise, read-only): `devvm --help`, `devvm secret/network/ssh-agent/layer/group/link/ls/size/host --help`, `devvm ls --json` → `{"version":1,"vms":[]}`; `LICENSE` (MIT). The 0.1.0 binary lacks custom secrets and the 17-VM cap — pin ≥0.1.1 at adoption.
+
+## Owner decision (2026-11-18)
+
+**One devvm per Managed Project.** The sandbox boundary equals the project: the project's runtime server and every agent session for that project (across concurrent Tasks and waves) run inside its single VM; its secret bindings and network tier are the project's configured set. Consequences the spec must carry:
+
+- Capability profiles (ticket 009) are the *within-VM* control — devvm enforces the project ceiling (VM lifetime, network tier, secret bindings); profiles decide what a role may touch inside it.
+- Per-Run VM isolation remains an escalation option (untrusted input, destructive tasks), not a default; the 17-VM cap is therefore not a v1 constraint.
+- The Factory-managed runtime server for a project (ticket 006) lives inside that project's VM; the Go control plane stays on the host and reaches it via `devvm host` + SSH.
+- Secrets are project-scoped by construction: binding a secret to the project's VM grants it to every role in that project unless profiles withhold it.
+
+Glossary term: **Project VM** (added to `CONTEXT.md`).

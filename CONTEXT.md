@@ -9,8 +9,12 @@ The harness itself: it owns workflow state, gates, and audit, and delegates agen
 _Avoid_: platform, framework, orchestrator
 
 **Managed Project**:
-A repository plus its tracker that Factory operates on, with its own workflow definitions and runtime configuration.
+A repository plus its tracker that Factory operates on, with its own workflow definitions, runtime configuration, and Project VM.
 _Avoid_: project, repo, workspace
+
+**Project VM**:
+The devvm instance that backs a Managed Project: the sandbox, network, and secret boundary for every agent session and runtime server of that project.
+_Avoid_: sandbox, container, environment
 
 **Subproject**:
 A managed project served by Factory where the work being done belongs to Factory itself (the first subproject is Factory).
