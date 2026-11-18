@@ -16,6 +16,18 @@ _Avoid_: project, repo, workspace
 The devvm instance that backs a Managed Project: the sandbox, network, and secret boundary for every agent session and runtime server of that project.
 _Avoid_: sandbox, container, environment
 
+**Project Envelope**:
+The containment declaration in a Workflow Artifact — clone mode, network tier and allowlist, secret bindings, spend measurement — that Factory compiles into the Project VM.
+_Avoid_: config, settings, policy
+
+**Capability Profile**:
+A post-v1 refinement of the Project Envelope: a narrower set of network, secret, and Factory-reach permissions for one role, compiled through the same path.
+_Avoid_: role, permission set
+
+**Egress Request**:
+A blocked network access attempt that devvm surfaces to the Owner for an allow-or-deny decision, recorded with its outcome.
+_Avoid_: block, exception
+
 **Subproject**:
 A managed project served by Factory where the work being done belongs to Factory itself (the first subproject is Factory).
 _Avoid_: self-hosting target, self-managed repo
