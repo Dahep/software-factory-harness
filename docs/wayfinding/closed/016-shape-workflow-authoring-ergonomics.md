@@ -32,3 +32,5 @@ Deliverable: a prototype artifact (rough loop definitions in the top two candida
 4. **Reuse: copy-on-init.** Project Init opens a PR adding the default artifact; merging it makes the project manageable. Deviation from the default is PRs against the project's copy — no inheritance or override machinery.
 5. **Measurement: optional per stage.** A default metric set applies to every Run (stage cycle time, gate verdicts, review findings, retries, tokens/cost, PR latency, tool errors, agent-confusion proxies); stages may add metrics; declaring none is valid.
 6. **Prototype capture.** `prototype/workflow-authoring/` holds the YAML+Schema version, the Dhall sketch, the compiled IR, and `validate.py`; its first run caught an unbounded `returnTo` — the case for schema-checked authoring, now native in Dhall.
+
+**Amendment (2026-11-19).** Item 2's `.factory/` directory gains `roster.dhall` (ADR-0007); the Agent Roster compiles with the workflow and envelope into the IR.

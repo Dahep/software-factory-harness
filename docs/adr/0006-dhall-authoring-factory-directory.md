@@ -11,7 +11,7 @@ Factory's Workflow Artifact is a `.factory/` directory committed in each Managed
 
 ## Consequences
 
-- `dhall-golang` conformance with the workflow schema is a build prerequisite, not a runtime gamble: if the binding cannot evaluate the schema, the build gate fails. There is no second frontend in v1 (owner's call, taken with the risk in view).
+- `dhall-golang` conformance with the artifact's Dhall schema (workflow, roster, envelope) is a build prerequisite, not a runtime gamble: if the binding cannot evaluate the schema, the build gate fails. There is no second frontend in v1 (owner's call, taken with the risk in view).
 - Secrets by name only means a Workflow Artifact is safe to publish in a public repo.
 - The default artifact includes a default Agent Roster; Project Init renders a primary model per default seat into the project's copy, and later fallbacks are roster PRs (ADR-0007).
 - The prototype (`prototype/workflow-authoring/`) remains as evidence; its validator caught an unbounded `returnTo` on first run.

@@ -61,11 +61,11 @@ The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; Wave
 _Avoid_: runtime configuration, agent config, team
 
 **Roster Entry**:
-One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements, and budget. A Stage selects an entry by id and cannot override its model or tools; informally, a seat.
+One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
 _Avoid_: agent config, worker
 
 **Model Catalog**:
-The adapter's declaration of available model IDs, providers, capabilities, tool classes, and current availability; its static descriptor validates at compile time and its live overlay informs Project Init.
+The adapter's declaration of available model IDs, providers, capabilities (including modality), tool classes, and current availability; its static descriptor validates at compile time and its live overlay informs Project Init.
 _Avoid_: model list, allowlist, provider config
 
 **Gate**:
@@ -73,7 +73,7 @@ A harness-enforced condition that must pass before a Task advances; its verdict 
 _Avoid_: check, criteria, approval
 
 **Failure Policy**:
-The Workflow-defined action a failed Gate triggers: retry within the Stage, return the Task to an earlier Stage, open a follow-up Issue, change Issue state, or wait for the Owner.
+The Workflow-defined action a failure triggers: retry within the Stage, return the Task to an earlier Stage, open a follow-up Issue, change Issue state, or wait for the Owner. A Gate carries one for its verdict; a Stage carries one for Run-level failures outside a Gate (model exhaustion, a crashed Run), with the same actions and bounds.
 _Avoid_: error handling, fallback, retry
 
 **TriageDecision**:
@@ -85,7 +85,7 @@ The version-controlled artifact a Managed Project carries in its own repository:
 _Avoid_: config file, pipeline definition
 
 **Project Init**:
-The act of adopting a repository as a Managed Project: Factory proposes a PR adding the Workflow Artifact, the Owner merges it, and the project becomes manageable.
+The act of adopting a repository as a Managed Project: Factory validates the configured harness, renders the Workflow Artifact (including the Agent Roster's primary models), proposes one init PR, the Owner merges it, and the project becomes manageable.
 _Avoid_: onboarding, setup
 
 **Checkpoint**:

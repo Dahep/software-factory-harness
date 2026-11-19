@@ -33,7 +33,7 @@ The path to other users is preserved by four seams, not by designing for them no
 | Process model | Resident Go daemon + thin CLI over a local JSON API on a Unix socket | ADR-0005 |
 | Durable state | One SQLite (WAL) database: append-only transition log, projections, snapshots | ADR-0002, ADR-0005 |
 | Runtime | `RuntimeAdapter` seam; OpenCode as the one real adapter; a test double proves the seam | ADR-0002 |
-| Agent Roster | `.factory/roster.dhall`: project-owned entries, ordered model lists, policy references; Stages select by id; compiled into the IR | ADR-0007 |
+| Agent Roster | `.factory/roster.dhall`: project-owned entries, ordered model lists, policy references; Wave entries select by id; compiled into the IR | ADR-0007 |
 | Containment | One Project VM (devvm) per Managed Project; Project Envelope compiled from the artifact | ADR-0004, ticket 017 |
 | Tracker | GitHub Issues via `gh`; adapter interface designed for others | ticket 003, ticket 008 |
 | Loop | intake → triage → implement → gates → review → PR → merge, Owner at two Checkpoints | ADR-0003 |
@@ -130,7 +130,7 @@ Log event types the transition log must carry (fields, not DDL):
 | Transition | sequence, Managed Project, Task, Run, Stage, before/after state, cause (Gate, Checkpoint, Failure Policy, reconciliation), IR digest |
 | Gate verdict | Gate id, check, input references with digests and the PR head where relevant, result, reason, attempts, policy applied |
 | Checkpoint | asks (artifact references), decision, edits or reason, actor, time |
-| Run | adapter instance, Task input digest, Outcome, model attempts (requested, resolved, reason), usage, transcript reference, completeness |
+| Run | adapter instance, Task input digest, Outcome, model attempts (requested, resolved, outcome, reason), usage, transcript reference, completeness |
 | Effect | tracker/PR/merge/VM action, idempotency key, result, provider reference |
 
 Pre-Task transitions (intake, triage, the triage Checkpoint) carry the Issue and the triage Run; `Task` is absent until approval creates it.
@@ -144,14 +144,14 @@ The seam is T3-shaped (ticket 006, ADR-0002). Four parts:
 | Part | Contract |
 | --- | --- |
 | Task in | typed: prompt, workspace reference, resolved roster entry (id, instructions, ordered model list, policy reference), capability-profile ref (the Project Envelope in v1), budget |
-| Outcome out | typed: status, artifacts, diff reference, transcript reference, usage; on failure, a typed reason and the model attempt trail |
+| Outcome out | typed: status, artifacts, diff reference, transcript reference, usage, and the model attempt trail (requested model, resolved model, outcome, failure reason where an attempt failed); a failed Outcome also carries its typed reason |
 | Events | normalized stream for session / message / tool / permission. Telemetry only — never Workflow state |
 | Capabilities | an explicit descriptor per driver: streaming, steer/interrupt, checkpoints, rollback, sandboxed composition, native option IDs, Model Catalog, failure-reason set |
 
 Rules that keep the seam honest:
 
 - **Declared, not assumed.** Factory must not use a capability the adapter did not declare. A Stage that requires an undeclared capability is rejected at validation or blocks the Task with evidence; it never degrades silently.
-- **Model fallback is declared.** The adapter tries only the entry's ordered model list, records every attempt, and returns a typed failure to the Stage that dispatched the agent when the list is exhausted; it never substitutes a model the roster did not name. The failure-reason set is closed — `unavailable`, `rate-limited`, `auth-failed`, `context-exceeded`, `refused`, `unknown` — and every attempt records one. The Stage's Failure Policy decides what happens next.
+- **Model fallback is declared.** The adapter tries only the entry's ordered model list and never substitutes a model the roster did not name; model IDs are Model Catalog IDs, never host-resolved aliases. It records every attempt — requested model, resolved model, outcome — and, for a failed attempt, one reason from the closed set — `unavailable`, `rate-limited`, `auth-failed`, `context-exceeded`, `refused`, `unknown`. The attempt trail travels with every Outcome, so a successful fallback is as visible as an exhausted list. When the list is exhausted, the adapter returns a typed failure to the Stage that dispatched the agent; the Stage's Failure Policy decides what happens next.
 - **Driver kind vs instance.** Two configurations or accounts never share mutable session or catalog state. The adapter records which instance produced an Outcome.
 - **Native option IDs survive normalization.** Display labels are not valid replies for permission or question prompts.
 - **No setup as a health-check side effect.** Opening a session must not trigger MCP servers, hooks, or logins (ticket 006).
@@ -297,7 +297,7 @@ A Gate report is a first-class record: Gate id, Stage, check, input references w
 | pr-state | provider | the PR is in the expected state |
 | pr-checks | provider | required checks are green |
 
-**Failure Policy.** Each Gate carries one, defined in the Workflow: retry within the Stage, return the Task to an earlier Stage, open a follow-up Issue, change Issue state, or wait for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 008). Retry and return-to counts are bounded; an unbounded `returnTo` is invalid IR (the prototype's validator caught exactly this on its first run — [`prototype/workflow-authoring/`](../../prototype/workflow-authoring/README.md)). The default policy bounds fix rounds at two, then parks the Task Blocked for the Owner. Before a Task exists, the same bound parks the **Issue** in the Owner's inbox; it does not create a Task.
+**Failure Policy.** Each Gate carries one, defined in the Workflow: retry within the Stage, return the Task to an earlier Stage, open a follow-up Issue, change Issue state, or wait for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 008). Retry and return-to counts are bounded; an unbounded `returnTo` is invalid IR (the prototype's validator caught exactly this on its first run — [`prototype/workflow-authoring/`](../../prototype/workflow-authoring/README.md)). The default policy bounds fix rounds at two, then parks the Task Blocked for the Owner. Before a Task exists, the same bound parks the **Issue** in the Owner's inbox; it does not create a Task. A Stage also carries one for failures outside a Gate — model exhaustion or a crashed Run — with the same actions and bounds (§3.11).
 
 **Gate integrity.** An agent may edit `.factory/` on its branch, but it cannot loosen the Gates it is running under: each Task pins the IR it was created with, including its Agent Roster (§4.8, D3). A change to the artifact takes effect for later Tasks, after review and merge.
 
@@ -349,7 +349,7 @@ Blocked is a Task state with evidence: what failed, which Gate or effect, what w
 | --- | --- |
 | Gate failure | The Gate's Failure Policy: bounded retry, return to an earlier Stage, follow-up Issue, Issue state change, or wait for the Owner |
 | Run crash or vanished session | Outcome unknown → the Run is recorded failed with evidence; re-dispatch only per the Failure Policy |
-| Model exhaustion | The adapter tried every model in the entry's ordered list and all failed; the Run is recorded failed with the typed reason and attempt trail; the Stage's Failure Policy decides retry, return, follow-up, Issue state, or wait |
+| Model exhaustion | The adapter tried every model in the entry's ordered list and all failed; the Run is recorded failed with the final attempt's typed reason and the full attempt trail; the Stage's Failure Policy decides retry, return, follow-up, Issue state, or wait |
 | Pre-Task triage failure | Recorded against the Issue; retry within Triage or wait for the Owner; no Task is created |
 | Project VM lost | Task Blocked with evidence; no silent recreation (ADR-0005) |
 | Tracker/PR divergence | Reconcile from provider state; record the correction; block if the two cannot be reconciled safely |
@@ -425,10 +425,10 @@ Top-level fields the IR must express (names follow the prototype's compiled sket
 | IR version | engine contract version |
 | Workflow identity | name, description, Managed Project reference |
 | Envelope | compiled Project Envelope (§4.4) |
-| Roster | entries: id, role, persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements, profile ref, budget; one adapter kind per Managed Project |
+| Roster | entries: id, role, persona, instructions (content-addressed), ordered model list, tool and permission policy reference (the post-v1 profile ref; the Project Envelope in v1), adapter options, declared requirements, budget; one adapter kind per Managed Project |
 | Concurrency | max in-flight Tasks |
 | Checkpoints | id → Stage, the artifacts asked for |
-| Stages | id, entry condition, Wave (agent entries: roster entry id; role/persona metadata), Gates (id, check class + parameters, Failure Policy with bounds), Checkpoint, action, measures |
+| Stages | id, entry condition, Wave (agent entries: roster entry id; role/persona metadata), Gates (id, check class + parameters, Failure Policy with bounds), the Stage's Run-failure policy, Checkpoint, action, measures |
 | Measures | default set reference plus optional per-Stage additions |
 
 The roster is part of the IR; a Task pin therefore covers the models, tools, and permissions that execute it (ADR-0007, D3).
@@ -445,7 +445,7 @@ The Envelope is the containment declaration Factory compiles into the Project VM
 | `secrets` | secret **names** only (e.g. `github`, `model-provider`) | `devvm secret use` bindings per Project VM |
 | `budget` | spend **measurement** declaration; no cap in v1 | usage recording per Task |
 
-Roster entries declare the secrets and hosts they require; the compiler checks those declarations are a subset of the Envelope's grants (ADR-0007). The Envelope grants; it never selects a model.
+Roster entries declare their requirements: secret names and hosts, checked against the Envelope's grants; tool classes and modality, checked against the Model Catalog for every model in the entry's list (ADR-0007). The Envelope grants; it never selects a model.
 
 The envelope declares clone mode, and v1 enforces `true` (ADR-0004, ticket 009). The developer preset's exact host list is build-time data seeded from the prototype (`github.com`, `api.github.com`, npm, PyPI, Go proxy, crates.io); the Owner may edit it in the artifact. **⟨default D7⟩**
 
@@ -470,12 +470,12 @@ A default metric set applies to every Run; per-Stage declarations are optional a
 The compiler and IR validator reject:
 
 - a `returnTo` naming no earlier Stage, or carrying no bound;
-- a Gate with no Failure Policy, or a policy with an unbounded retry/return;
+- a Gate or Stage with no Failure Policy, or a Failure Policy with an unbounded retry/return;
 - a Checkpoint naming no Stage, or asking for an artifact no Stage produces;
-- a Wave entry naming no Roster Entry, or an entry whose role or persona metadata is missing;
-- a Roster Entry with an empty model list, an unknown model or capability in the adapter's Model Catalog, or a model-list member the adapter cannot serve;
+- a Wave entry naming no Roster Entry, or an entry missing its role or persona;
+- a Roster Entry with an empty model list, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
 - an entry whose declared secret names or hosts are not granted by the Envelope;
-- an entry whose policy reference resolves to no project or profile policy;
+- an entry whose policy reference does not resolve to the project policy (the Project Envelope in v1; a Capability Profile post-v1);
 - a Gate check referencing an unknown check class or malformed parameters;
 - a `ForEach` without a bound;
 - concurrency below 1;
@@ -501,7 +501,7 @@ At Project VM creation or reconfiguration, Factory applies the Envelope in one p
 
 ### 5.2 Full agency inside the Project VM
 
-Agents get filesystem, tools, installs, and the copied repository. OpenCode runs unrestricted inside the Project VM. v1 has no per-tool allowlists and no role profiles; the VM is the control (ADR-0004). A Roster Entry's policy reference exists for post-v1 Capability Profiles; in v1 it resolves to that project-wide policy.
+Agents get filesystem, tools, installs, and the copied repository. OpenCode runs unrestricted inside the Project VM. v1 has no per-tool allowlists and no role profiles; the VM is the control (ADR-0004). A Roster Entry's policy reference exists for post-v1 Capability Profiles; in v1 it resolves to the project-wide policy, the Project Envelope.
 
 ### 5.3 What leaves the Project VM
 
@@ -694,7 +694,7 @@ Adopting a repository as a Managed Project is a PR, not a console wizard ([`CONT
 
 1. The Owner registers the repository and its tracker with Factory.
 2. The Owner configures the harness host-side (OpenCode in v1): adds provider authentication and verifies the models Factory may offer. Factory stores no secret values.
-3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, asks for a primary model for each default seat (triager, implementer, reviewer/spec-fidelity, reviewer/adversarial), renders `.factory/roster.dhall`, writes the configured providers' secret names and endpoints into `envelope.dhall`, and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR.
+3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, asks for a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)), renders `.factory/roster.dhall`, writes the configured providers' secret names and endpoints into `envelope.dhall`, and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR. **⟨default D10⟩**
 4. The Owner reviews and merges the init PR. The repository is now a Managed Project.
 5. Secret **values** are entered in the harness or devvm host-side store under the names the artifact declares; no value enters Factory, the repository, the VM, or a log.
 6. Branch protection is verified: merges restricted to Factory's identity; the project token cannot merge.
@@ -738,7 +738,7 @@ All are clients of the same API; none reads the database.
 | --- | --- |
 | Go toolchain and a single daemon binary | ADR-0001; static distribution, goroutines, official MCP/provider SDKs if needed |
 | SQLite with WAL | ADR-0005; one writer, one backup file |
-| `dhall-golang` **conformance gate** | ADR-0006: the build fails if the binding cannot evaluate the workflow schema. There is no second frontend |
+| `dhall-golang` **conformance gate** | ADR-0006: the build fails if the binding cannot evaluate the artifact schema (workflow, roster, envelope). There is no second frontend |
 | `cel-go` | guards (ticket 011) |
 | OpenCode, **pinned version** | ADR-0002; contract tests against the pinned API surface, not "latest" (ticket 002) |
 | Configured harness provider (OpenCode in v1) with access to the selected models | Project Init validates it live; Factory stores no secret values (ADR-0007) |
@@ -759,7 +759,7 @@ A CI job, not a runtime hope:
 3. Validate roster references against the adapter's pinned Model Catalog descriptor, then run the IR validator (§4.8).
 4. Fail the build on any error, with the Dhall diagnostics attached.
 
-The Model Catalog descriptor is pinned with the adapter; live availability is not a CI input, so a provider rotation cannot fail the build.
+The static descriptor declares model IDs, providers, capabilities, and tool classes, and is pinned with the adapter; live availability is an init-time overlay, not a CI input, so a provider rotation cannot fail the build.
 
 The gate failing stops the build. It does not trigger a fallback frontend: the Owner took the Dhall decision with this risk in view (ADR-0006), and ticket 011's fallback order is a re-decision, not a quiet switch.
 
@@ -768,7 +768,7 @@ The gate failing stops the build. It does not trigger a fallback frontend: the O
 | Dependency | Pin | Compatibility policy |
 | --- | --- | --- |
 | devvm | ≥ 0.1.1 | CLI + `--json` version 1 (additive); re-pin only after a contract run |
-| OpenCode | one pinned release | contract tests for sessions, events, permissions, questions; capability descriptor records the version |
+| OpenCode | one pinned release | contract tests for sessions, events, permissions, questions, model fallback order and exhaustion; capability descriptor records the version |
 | Model Catalog | adapter descriptor version | additive; unknown model IDs fail compile; live availability is not pinned |
 | IR | its own major version | engine refuses unknown versions |
 | Dhall standard | the subset `dhall-golang` supports | conformance gate proves the schema, not the standard |
@@ -811,7 +811,7 @@ Dependency-ordered, each step ending in a verifiable state:
 
 1. Dhall conformance spike + IR validator + default artifact (workflow, roster, envelope) (the earliest failure is the cheapest).
 2. Transition log, projections, snapshots, API skeleton, CLI client.
-3. Fake `RuntimeAdapter` runs the Loop's state machine end to end with no real agent.
+3. Fake `RuntimeAdapter` runs the Loop's state machine end to end with no real agent, including model fallback and exhaustion.
 4. devvm lifecycle + Envelope compilation + secret bindings.
 5. OpenCode adapter inside the Project VM; Model Catalog; contract tests.
 6. Tracker adapter, Gates, Checkpoints, PR, squash merge.
@@ -846,6 +846,7 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D7 | Developer preset host list seeded from the prototype | §4.4 |
 | D8 | Artifact schemas share `.factory/schema/` with the Dhall types | §4.1 |
 | D9 | CLI verb and command names beyond the three ticket-010 names | §7.3 |
+| D10 | Init blocks and opens no PR when no provider is configured or live validation fails | §7.1 |
 
 ---
 
@@ -867,6 +868,8 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a harness action between Review and Merge, with Gate evaluation inside Stages (§3.1).
+
+I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md).
 
 ---
 
