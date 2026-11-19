@@ -1,0 +1,244 @@
+{
+  "irVersion": "factory-ir/v1",
+  "workflow": "default-loop",
+  "concurrency": 1,
+  "envelope": {
+    "clone": true,
+    "network": {
+      "tier": "allowlist",
+      "allow": [
+        "github.com",
+        "api.github.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "proxy.golang.org",
+        "crates.io",
+        "static.crates.io"
+      ]
+    },
+    "secrets": [
+      "github",
+      "model-provider"
+    ],
+    "budget": {
+      "measure": true
+    }
+  },
+  "checkpoints": {
+    "triage-approval": {
+      "stage": "triage",
+      "asks": [
+        "TriageDecision"
+      ]
+    },
+    "merge-approval": {
+      "stage": "merge",
+      "asks": [
+        "PR",
+        "GateReport"
+      ]
+    }
+  },
+  "measure": [
+    "stage.cycle_time",
+    "gate.verdict",
+    "review.findings",
+    "run.retries",
+    "run.tokens",
+    "run.cost",
+    "pr.merge_latency",
+    "tool.error_rate",
+    "agent.confusion_proxies"
+  ],
+  "stages": [
+    {
+      "id": "intake",
+      "trigger": null,
+      "agents": [],
+      "gates": [],
+      "checkpoint": null,
+      "action": null,
+      "measure": [
+        "intake.new_issues",
+        "intake.triage_latency"
+      ]
+    },
+    {
+      "id": "triage",
+      "trigger": null,
+      "agents": [
+        {
+          "role": "triager"
+        }
+      ],
+      "gates": [
+        {
+          "id": "decision-shape",
+          "check": {
+            "op": "schema",
+            "ref": "TriageDecision"
+          },
+          "onFail": {
+            "retry": 1,
+            "then": "block"
+          }
+        },
+        {
+          "id": "scope-declared",
+          "check": {
+            "op": "field_required",
+            "path": "TriageDecision.acceptance_criteria"
+          },
+          "onFail": {
+            "returnTo": "triage",
+            "max": 2,
+            "then": "block"
+          }
+        }
+      ],
+      "checkpoint": "triage-approval",
+      "action": null,
+      "measure": [
+        "triage.decision_time",
+        "triage.owner_edits"
+      ]
+    },
+    {
+      "id": "implement",
+      "trigger": null,
+      "agents": [
+        {
+          "role": "implementer"
+        }
+      ],
+      "gates": [
+        {
+          "id": "build",
+          "check": {
+            "op": "command",
+            "argv": [
+              "make",
+              "build"
+            ],
+            "shell": false
+          },
+          "onFail": {
+            "retry": 2,
+            "then": "block"
+          }
+        },
+        {
+          "id": "tests",
+          "check": {
+            "op": "command",
+            "argv": [
+              "make",
+              "test"
+            ],
+            "shell": false
+          },
+          "onFail": {
+            "retry": 2,
+            "then": "block"
+          }
+        },
+        {
+          "id": "diff-present",
+          "check": {
+            "op": "changed_files",
+            "cmp": "> 0"
+          },
+          "onFail": {
+            "returnTo": "triage",
+            "max": 2,
+            "then": "block",
+            "open_issue": true
+          }
+        }
+      ],
+      "checkpoint": null,
+      "action": null,
+      "measure": [
+        "implement.cycle_time",
+        "implement.retries",
+        "implement.diff_size"
+      ]
+    },
+    {
+      "id": "review",
+      "trigger": null,
+      "agents": [
+        {
+          "role": "reviewer",
+          "persona": "spec-fidelity"
+        },
+        {
+          "role": "reviewer",
+          "persona": "adversarial"
+        }
+      ],
+      "gates": [
+        {
+          "id": "review-verdict",
+          "check": {
+            "op": "review_verdict",
+            "expect": "approve"
+          },
+          "onFail": {
+            "returnTo": "implement",
+            "max": 2,
+            "then": "block"
+          }
+        }
+      ],
+      "checkpoint": null,
+      "action": null,
+      "measure": [
+        "review.findings",
+        "review.turnaround"
+      ]
+    },
+    {
+      "id": "merge",
+      "trigger": null,
+      "agents": [],
+      "gates": [
+        {
+          "id": "pr-open",
+          "check": {
+            "op": "pr_state",
+            "expect": "open"
+          },
+          "onFail": {
+            "open_issue": true,
+            "then": "block"
+          }
+        },
+        {
+          "id": "checks-green",
+          "check": {
+            "op": "pr_checks",
+            "expect": "all_pass"
+          },
+          "onFail": {
+            "returnTo": "implement",
+            "max": 1,
+            "then": "block"
+          }
+        }
+      ],
+      "checkpoint": "merge-approval",
+      "action": {
+        "pr": {
+          "merge": "squash",
+          "via": "gh"
+        }
+      },
+      "measure": [
+        "merge.latency",
+        "merge.squash_size"
+      ]
+    }
+  ]
+}

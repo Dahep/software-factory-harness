@@ -1,0 +1,108 @@
+# PROTOTYPE — default loop, YAML + schema (ticket 016)
+apiVersion: factory/v1
+kind: Workflow
+metadata:
+  name: default-loop
+  description: Issues in, reviewed code out. Factory's first milestone.
+
+envelope:                      # Project Envelope (ADR-0004) — drives devvm
+  clone: true
+  network:
+    tier: allowlist
+    allow:
+      - github.com
+      - api.github.com
+      - registry.npmjs.org
+      - pypi.org
+      - files.pythonhosted.org
+      - proxy.golang.org
+      - crates.io
+      - static.crates.io
+  secrets: [github, model-provider]
+  budget:
+    measure: true
+
+concurrency: 1                 # max in-flight Tasks (ADR-0003)
+
+checkpoints:
+  triage-approval:
+    stage: triage
+    asks: [TriageDecision]
+  merge-approval:
+    stage: merge
+    asks: [PR, GateReport]
+
+measure:                       # every Run emits these (directive #15)
+  - stage.cycle_time
+  - gate.verdict
+  - review.findings
+  - run.retries
+  - run.tokens
+  - run.cost
+  - pr.merge_latency
+  - tool.error_rate
+  - agent.confusion_proxies
+
+stages:
+  - id: intake
+    on: { poll: tracker, every: 5m }
+    measure: [intake.new_issues, intake.triage_latency]
+
+  - id: triage
+    inputs: [Task]
+    wave:
+      agents:
+        - { role: triager }
+    produces: TriageDecision
+    gates:
+      - id: decision-shape
+        check: { schema: TriageDecision }
+        onFail: { retry: 1, then: block }
+      - id: scope-declared
+        check: { field: TriageDecision.acceptance_criteria, required: true }
+        onFail: { returnTo: triage, max: 2, then: block }
+    checkpoint: triage-approval
+    measure: [triage.decision_time, triage.owner_edits]
+
+  - id: implement
+    inputs: [Task, TriageDecision]
+    wave:
+      agents:
+        - { role: implementer }
+    gates:
+      - id: build
+        check: { command: "make build" }
+        onFail: { retry: 2, then: block }
+      - id: tests
+        check: { command: "make test" }
+        onFail: { retry: 2, then: block }
+      - id: diff-present
+        check: { changed_files: "> 0" }
+        onFail: { returnTo: triage, max: 2, then: block, open_issue: true }
+    measure: [implement.cycle_time, implement.retries, implement.diff_size]
+
+  - id: review
+    inputs: [Task, TriageDecision]
+    wave:
+      agents:
+        - { role: reviewer, persona: spec-fidelity }
+        - { role: reviewer, persona: adversarial }
+    gates:
+      - id: review-verdict
+        check: { all_reviewers: approve }
+        onFail: { returnTo: implement, max: 2, then: block }
+    measure: [review.findings, review.turnaround]
+
+  - id: merge
+    inputs: [Task, PR]
+    gates:
+      - id: pr-open
+        check: { pr: open, project: tracker }
+        onFail: { open_issue: true, then: block }
+      - id: checks-green
+        check: { pr_checks: all_pass }
+        onFail: { returnTo: implement, max: 1, then: block }
+    checkpoint: merge-approval
+    action:
+      pr: { merge: squash, via: gh }
+    measure: [merge.latency, merge.squash_size]

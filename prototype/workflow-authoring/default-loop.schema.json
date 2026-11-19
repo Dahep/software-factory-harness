@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "factory/v1/workflow.schema.json",
+  "title": "Factory Workflow (PROTOTYPE)",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "envelope", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "factory/v1" },
+    "kind": { "enum": ["Workflow"] },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "envelope": {
+      "type": "object",
+      "required": ["clone", "network", "secrets"],
+      "properties": {
+        "clone": { "type": "boolean" },
+        "network": {
+          "type": "object",
+          "required": ["tier", "allow"],
+          "properties": {
+            "tier": { "enum": ["open", "internet", "allowlist", "none"] },
+            "allow": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          },
+          "additionalProperties": false
+        },
+        "secrets": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "budget": {
+          "type": "object",
+          "properties": { "measure": { "type": "boolean" } },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "concurrency": { "type": "integer", "minimum": 1 },
+    "checkpoints": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["stage", "asks"],
+        "properties": {
+          "stage": { "type": "string" },
+          "asks": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "measure": { "type": "array", "items": { "type": "string" } },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "measure"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "on": { "type": "object" },
+          "inputs": { "type": "array", "items": { "type": "string" } },
+          "produces": { "type": "string" },
+          "wave": {
+            "type": "object",
+            "required": ["agents"],
+            "properties": {
+              "agents": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["role"],
+                  "properties": {
+                    "role": { "enum": ["triager", "implementer", "reviewer"] },
+                    "persona": { "type": "string" }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "gates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "check", "onFail"],
+              "properties": {
+                "id": { "type": "string" },
+                "check": { "type": "object" },
+                "onFail": {
+                  "type": "object",
+                  "properties": {
+                    "retry": { "type": "integer", "minimum": 0 },
+                    "returnTo": { "type": "string" },
+                    "max": { "type": "integer", "minimum": 0 },
+                    "then": { "enum": ["block", "wait_for_owner"] },
+                    "open_issue": { "type": "boolean" }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "checkpoint": { "type": "string" },
+          "action": { "type": "object" },
+          "measure": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
