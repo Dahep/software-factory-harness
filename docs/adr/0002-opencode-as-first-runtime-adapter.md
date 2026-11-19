@@ -10,8 +10,9 @@ Factory's harness is a hybrid: a Go-owned deterministic control plane (workflow 
 
 ## Consequences
 
-- Runtime configurations are Factory-managed artifacts per managed project; host auth stays host-level.
+- Runtime configuration is the Managed Project's Agent Roster in `.factory/roster.dhall` (ADR-0007): project-owned, compiled into the IR, and validated by Factory against the adapter's Model Catalog. Host and provider auth stay host-level; Factory stores no secret values.
+- A model exhaustion is a typed failed Outcome returned to the Stage that dispatched the agent; the adapter never substitutes outside the entry's declared model list (ADR-0007).
 - Capability enforcement lives in the adapter + a minimal Factory plugin; an optional sandboxed composition surface is reserved as a capability, never conflated with the typed workflow graph.
 - Architectural lock-in is bounded: swapping runtimes means one adapter replacement plus translating agent/model/permission/tool config; Factory's durable records and artifacts stay portable.
 
-Status: accepted 2026-11-18 (wayfinder ticket: harness substrate).
+Status: accepted 2026-11-18 (wayfinder ticket: harness substrate). Amended 2026-11-19: runtime configuration is the project-owned Agent Roster (ADR-0007); adapter Outcomes carry failure reasons and attempt trails.
