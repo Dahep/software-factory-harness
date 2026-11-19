@@ -69,7 +69,7 @@ The typed result of the Triage Stage: suggested labels and priority, acceptance 
 _Avoid_: assessment, analysis
 
 **Workflow Artifact**:
-The version-controlled artifact a Managed Project carries in its own repository: its Workflow plus runtime configuration, added by Project Init.
+The version-controlled artifact a Managed Project carries in its own repository: its Workflow and Project Envelope, added by Project Init (ADR-0006). Runtime configuration is Factory-managed alongside it, not part of the artifact (ADR-0002).
 _Avoid_: config file, pipeline definition
 
 **Project Init**:
