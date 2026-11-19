@@ -1,6 +1,8 @@
 ---
 title: Shape workflow authoring ergonomics (what writing a Loop actually looks like)
 type: wayfinder:prototype
+assignee: done
+status: resolved
 blocked-by:
 - closed/008-shape-the-issue-driven-loop.md
 - closed/011-research-typed-functional-workflow-language.md
@@ -19,3 +21,14 @@ Shape the authoring experience with the owner, using a concrete artifact to reac
 5. **Migration**: Workflow Artifact versioning — how does a project's stored Workflow evolve when the default loop changes upstream?
 
 Deliverable: a prototype artifact (rough loop definitions in the top two candidates + a recommendation) plus a decision on the frontend, so the spec can commit. HITL: the owner reacts to the artifact.
+
+## Resolution
+
+**Decided 2026-11-18 (HITL with the owner), after the prototype at `prototype/workflow-authoring/`.**
+
+1. **Frontend: Dhall — no fallback.** Workflows are authored in Dhall and compiled by `dhall-golang` to the versioned IR (closed/011's contract). The conformance spike is a **build prerequisite**: the build gate fails if the Go binding cannot evaluate the workflow schema. The owner took this with the risk in view; the YAML+JSON-Schema prototype stays in the repo as documentation of the alternative, but no second frontend ships.
+2. **Artifact: committed directory `.factory/`** in each Managed Project: `workflow.dhall` (loop), `envelope.dhall` (configuration: clone mode, network tier/allowlist, budget, secret names), `schema/` (Dhall types). Reviewed as one PR at init.
+3. **Secrets by name only.** The artifact is committed, so it never holds secret values: the envelope names secrets (`github`, `model-provider`); values live host-side in devvm's store and bind per Project VM (closed/017).
+4. **Reuse: copy-on-init.** Project Init opens a PR adding the default artifact; merging it makes the project manageable. Deviation from the default is PRs against the project's copy — no inheritance or override machinery.
+5. **Measurement: optional per stage.** A default metric set applies to every Run (stage cycle time, gate verdicts, review findings, retries, tokens/cost, PR latency, tool errors, agent-confusion proxies); stages may add metrics; declaring none is valid.
+6. **Prototype capture.** `prototype/workflow-authoring/` holds the YAML+Schema version, the Dhall sketch, the compiled IR, and `validate.py`; its first run caught an unbounded `returnTo` — the case for schema-checked authoring, now native in Dhall.
