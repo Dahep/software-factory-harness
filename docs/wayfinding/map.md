@@ -63,5 +63,4 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 
 - Building the harness or an MVP inside this map — execution follows the spec in a later effort.
 - Product/UI design for other users — audience path is noted, but design starts after the owner's needs are fully specified.
-- Specific cloud-provider deploy integrations — v1 is SSH to the owner's machines, cloud is optional and unspecified.
-- **Deploy as a Factory capability** (closed ticket 018): the owner ruled that each managed project defines its own deploy path (e.g. GitHub Actions); Factory's loop ends at merge. The researched mechanics (owner-triggered deploy workflow, declared host inventory, daemon-host SSH, sequential stop-on-failure) are recorded in the closed ticket if a future effort revisits this.
+- **Deploy as a Factory capability** (closed ticket 018): the owner ruled that each managed project defines its own deploy path (e.g. GitHub Actions); Factory's loop ends at merge. Cloud-provider deploy integrations fall under the same ruling. The researched mechanics (owner-triggered deploy workflow, declared host inventory, daemon-host SSH, sequential stop-on-failure) are recorded in the closed ticket if a future effort revisits this.
