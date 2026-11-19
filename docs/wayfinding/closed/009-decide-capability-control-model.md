@@ -31,3 +31,5 @@ Owner leans toward named role profiles (implementer, reviewer, deployer…) with
 7. **Post-v1 direction (recorded, not built):** per-role **Capability Profiles** as narrower envelopes (network subset, secret subset, Factory-reach subset, budget) compiled into the same devvm config and OpenCode permission refinements. The artifact remains the single source of truth; profiles never become a second configuration surface.
 
 Glossary: added **Project Envelope**, **Egress Request**, **Capability Profile** (post-v1) to `CONTEXT.md`.
+
+**Amendment (2026-11-18, with the spec).** An approved Egress Request is persisted as a **Workflow Artifact change** — a PR against the project's `envelope.dhall` — because ADR-0004/ADR-0006 make the artifact the single source of truth. Factory may apply the approved rule to the running Project VM immediately, recorded as provisional until the PR merges; a rejected PR revokes it at the next compile. Denials are recorded as decisions, not artifact changes.

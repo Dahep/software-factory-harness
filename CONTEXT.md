@@ -1,6 +1,6 @@
 # Factory
 
-A user-defined agent harness: deterministic, code-defined workflows that orchestrate agent teams across managed projects, each with its own tracker. This glossary fixes the vocabulary the spec and workflows share.
+A user-defined agent harness: deterministic, typed workflows defined as data that orchestrate agent teams across managed projects, each with its own tracker. This glossary fixes the vocabulary the spec and workflows share.
 
 ## Language
 
@@ -33,7 +33,7 @@ A managed project served by Factory where the work being done belongs to Factory
 _Avoid_: self-hosting target, self-managed repo
 
 **Workflow**:
-The code-defined, typed graph of stages a Task moves through in a Managed Project; the unit of project-defined behavior, not harness code.
+The typed, declarative graph of stages a Task moves through in a Managed Project, authored in the Workflow Artifact (ADR-0006); the unit of project-defined behavior, not harness code.
 _Avoid_: pipeline, script, automation
 
 **Task**:

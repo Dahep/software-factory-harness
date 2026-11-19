@@ -6,6 +6,8 @@ assignee: done
 status: resolved
 ---
 
+> **Superseded in part (2026-11-18).** The embedded-SDK recommendation in the Resolution below was superseded by [ticket 006](006-decide-harness-substrate.md) and ADR-0002: Factory runs OpenCode as a Factory-managed server and speaks to it over its API. The control-plane/runtime boundary, the "what Factory still needs to build" list, and the switching-cost analysis stand.
+
 ## Question
 
 Should Factory run its agents through **OpenCode + plugins** (reusing its agent runtime, session model, permissions, skill system) or implement its own agent execution layer? Study T3 Code's orchestration (delegation, worktrees, scheduling, pull-request linking), pi.dev's approach, and https://github.com/paperclipai/paperclip for what each teaches about structure without spaghetti: how they draw the boundary between deterministic orchestration and agent autonomy. Verdict: concrete integration surface (what OpenCode would have to expose via plugins/SDK), what must still be built, and a recommendation with the switching cost if the choice later reverses.

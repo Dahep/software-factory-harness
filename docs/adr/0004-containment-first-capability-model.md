@@ -10,9 +10,9 @@ Factory's v1 controls agency through the sandbox boundary rather than tool-level
 
 ## Consequences
 
-- Blocked egress becomes an Owner workflow (request → allow/deny → recorded), not a log entry discovered later.
+- Blocked egress becomes an Owner workflow (request → allow/deny → recorded), not a log entry discovered later. An **approval is persisted as a Workflow Artifact change** (a PR against the project's `envelope.dhall`); Factory may apply the approved rule to the running Project VM immediately, recorded as provisional until the change merges. A denied Egress Request is recorded as a decision, not as an artifact change.
 - Spend is measured per Task but not capped in v1; runaways are visible, not prevented.
 - The Project Envelope is the v1 tuning surface; capability profiles arrive post-v1 as stricter envelopes over the same compilation path.
 - PR-format validators are reserved in the model but not built in v1; when they land they are deterministic Factory checks, never LLM judgments.
 
-Status: accepted 2026-11-18 (wayfinder ticket: capability control model).
+Status: accepted 2026-11-18 (wayfinder ticket: capability control model). Amended 2026-11-18: egress approvals persist as Workflow Artifact changes, with provisional application until merge.

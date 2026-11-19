@@ -6,6 +6,8 @@ assignee: done
 status: resolved
 ---
 
+> **Superseded in part (2026-11-18).** The workflow-authorship recommendation in the Verdict below — embedded Starlark, or a subprocess/JSON contract — was superseded by tickets 011/016 and ADR-0006: Workflows are typed declarative data authored in Dhall and compiled to a Go-owned IR. The Go core recommendation stands (ADR-0001); OCaml and TypeScript remain escape hatches only if that decision is reopened.
+
 ## Question
 
 Which memory-managed (or opt-in-memory-managed) language should the Factory harness itself be implemented in — weighing the owner's preference for functional languages, agent-ecosystem glue (LLM SDKs, MCP, subprocess/process supervision, git, SSH ops), single-binary distribution, long-running daemon reliability, and extension story? Candidates to compare honestly: **Roc**, **Mojo**, **Go**, **OCaml**, **TypeScript** (baseline for ecosystem fit), and any the research surfaces. Verdict must state: maturity/stability risk, ecosystem fit for LLM/tooling glue, ergonomics for user-defined workflow code interoperability, and a recommendation with escape hatches.

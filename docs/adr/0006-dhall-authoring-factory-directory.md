@@ -1,6 +1,6 @@
 # Workflows are authored in Dhall inside a committed `.factory/` directory
 
-Factory's Workflow Artifact is a `.factory/` directory committed in each Managed Project: `workflow.dhall` (stages, waves, gates and their failure policies, checkpoints), `envelope.dhall` (clone mode, network tier and allowlist, budget, secret names), and `schema/` (the Dhall types). The Go engine evaluates Dhall with `dhall-golang` and compiles it to a versioned IR; the IR — not Dhall — is the contract the engine executes. `devvm` secret values never appear in the artifact: the envelope names secrets, the host holds the values, bindings are per Project VM. Project Init copies the default artifact through a PR; later deviations are PRs against the project's copy. Per-stage metric declarations are optional because a default metric set applies to every run.
+Factory's Workflow Artifact is a `.factory/` directory committed in each Managed Project: `workflow.dhall` (stages, waves, gates and their failure policies, checkpoints), `envelope.dhall` (clone mode, network tier and allowlist, spend measurement — the `budget` field; measured, not capped, per ADR-0004 — and secret names), and `schema/` (the Dhall types). The Go engine evaluates Dhall with `dhall-golang` and compiles it to a versioned IR; the IR — not Dhall — is the contract the engine executes. `devvm` secret values never appear in the artifact: the envelope names secrets, the host holds the values, bindings are per Project VM. Project Init copies the default artifact through a PR; later deviations are PRs against the project's copy. Per-stage metric declarations are optional because a default metric set applies to every run.
 
 ## Considered Options
 
@@ -15,4 +15,4 @@ Factory's Workflow Artifact is a `.factory/` directory committed in each Managed
 - Secrets by name only means a Workflow Artifact is safe to publish in a public repo.
 - The prototype (`prototype/workflow-authoring/`) remains as evidence; its validator caught an unbounded `returnTo` on first run.
 
-Status: accepted 2026-11-18 (wayfinder ticket: shape workflow authoring ergonomics).
+Status: accepted 2026-11-18 (wayfinder ticket: shape workflow authoring ergonomics). Amended 2026-11-18: the `budget` field is a spend-measurement declaration, never a cap (ADR-0004).

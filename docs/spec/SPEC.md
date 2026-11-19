@@ -2,7 +2,7 @@
 
 **Status:** build-ready planning artifact · 2026-11-18
 
-**Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. Where two source artifacts conflict, §10 quotes both instead of choosing.
+**Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. The conflicts found while writing it were reconciled against the ADRs and are recorded, with the artifacts changed, in §10.
 
 **Spec defaults.** Sentences marked **⟨default⟩** are choices this spec makes where the source artifacts are silent — scheduler ordering, denial paths, timeouts, and similar build-time detail. They are review targets, not recorded decisions, and are collected in §9.3 so a reviewer can audit them in one place.
 
@@ -150,7 +150,7 @@ Rules that keep the seam honest:
 - **No setup as a health-check side effect.** Opening a session must not trigger MCP servers, hooks, or logins (ticket 006).
 - **Runtime events are not state.** Only a committed transition advances a Task (ticket 002).
 
-The Task's **envelope reference** is the field ticket 006 calls a *capability-profile ref*; in v1 it resolves to the Managed Project's Project Envelope (see §10, I5).
+The Task's **envelope reference** is the field ticket 006 calls a *capability-profile ref*; v1 resolves it to the Managed Project's Project Envelope, and the field stays reserved for post-v1 profiles (ticket 006 amendment, ADR-0004).
 
 **OpenCode as the v1 adapter.** Factory starts, version-probes, idles out, and speaks to an OpenCode server over its API; external-server mode is post-v1. One server per Project VM — the instance is the Managed Project's runtime configuration — with many sessions (one per agent in a Wave). The server runs inside the Project VM; the daemon reaches it through `devvm host` + SSH (ticket 006, ticket 017).
 
@@ -531,9 +531,9 @@ Consequences the spec carries: remotes are HTTPS; a secret name in the artifact 
 
 ### 5.6 Egress Requests
 
-A devvm-blocked host — with method, path, and reason from `devvm network log --json` — becomes an **Egress Request** for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 009). The Owner allows or denies; the decision is recorded with its outcome, and both are measured. An allow adds the host to the project's allowlist; a denial is visible, not silent.
+A devvm-blocked host — with method, path, and reason from `devvm network log --json` — becomes an **Egress Request** for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 009). The Owner allows or denies; the decision is recorded with its outcome, and both are measured. A denial is visible, not silent.
 
-**⟨default⟩** The decision is persisted as a PR against `envelope.dhall`, since the artifact is the single source of truth. Factory applies the rule to the running VM immediately and marks it provisional until the PR merges; a rejected PR revokes it at the next compile. This keeps an unblock from waiting on review without creating a second configuration surface.
+An approval is persisted as a Workflow Artifact change: Factory proposes a PR against `envelope.dhall`, applies the approved rule to the running Project VM immediately, and records it as provisional until the PR merges; a rejected PR revokes it at the next compile (ADR-0004, ticket 009 amendment). This keeps an unblock from waiting on review without creating a second configuration surface.
 
 ### 5.7 Spend
 
@@ -821,93 +821,31 @@ Every **⟨default⟩** in one place, for review:
 | D3 | A denied merge returns the Task to Implement with the reason; the Workflow declares the denial/abandon split | §3.9 |
 | D4 | Each Task pins its IR version and digest at creation | §4.8 |
 | D5 | `clone` fixed true in v1 | §4.4 |
-| D6 | Egress allow applies provisionally, persisted by an artifact PR | §5.6 |
-| D7 | Concurrency above 1 gives each Task its own workspace in the VM | §2.5, §3.10 |
-| D8 | Metric thresholds are recorded configuration | §6.4 |
-| D9 | The Owner restarts the daemon after a self-merged change | §7.2 |
-| D10 | Developer preset host list seeded from the prototype | §4.4 |
-| D11 | Artifact schemas share `.factory/schema/` with the Dhall types | §4.1 |
-| D12 | CLI verb and command names beyond the three ADR-0005 names | §7.3 |
+| D6 | Concurrency above 1 gives each Task its own workspace in the VM | §2.5, §3.10 |
+| D7 | Metric thresholds are recorded configuration | §6.4 |
+| D8 | The Owner restarts the daemon after a self-merged change | §7.2 |
+| D9 | Developer preset host list seeded from the prototype | §4.4 |
+| D10 | Artifact schemas share `.factory/schema/` with the Dhall types | §4.1 |
+| D11 | CLI verb and command names beyond the three ADR-0005 names | §7.3 |
 
 ---
 
-## 10. Inconsistencies found
+## 10. Reconciliations (formerly inconsistencies)
 
-Quoted verbatim; not resolved here beyond noting which artifact the spec follows and why.
+The first draft found eight conflicts between the map, the glossary, the tickets, and the ADRs. Each is now fixed with the ADR as the authority; the table records what changed so the history stays legible. No decision was reversed; the two ADR amendments record mechanisms already implied by those ADRs' authority rules.
 
-### I1 — The map's notes still call the daemon decision open
+| # | Was | Resolution | Artifact changed |
+| --- | --- | --- | --- |
+| I1 | The map's Notes #12 called daemon-vs-CLI "decide later" | The note records ADR-0005's decision: resident daemon, thin CLI | [`map.md`](../wayfinding/map.md) |
+| I2 | The map destination, Notes #3/#14, and the glossary called Workflows "code-defined" with the language open; ticket 001 still recommended Starlark | A Workflow is typed declarative data (Dhall → IR), not code running in the Go process; the wording matches ADR-0006 and a superseded-in-part note now heads 001 | [`map.md`](../wayfinding/map.md), [`CONTEXT.md`](../../CONTEXT.md), [`closed/001`](../wayfinding/closed/001-research-harness-language.md) |
+| I3 | Ticket 002 recommended the embedded OpenCode SDK | Superseded by ticket 006/ADR-0002 (managed server over its API); a superseded-in-part note now heads 002 | [`closed/002`](../wayfinding/closed/002-research-build-vs-opencode-plugins.md) |
+| I4 | The map destination promised "per-agent capability control" | v1 controls per Managed Project (ADR-0004); per-role profiles are post-v1 | [`map.md`](../wayfinding/map.md) |
+| I5 | Ticket 006's Task-in named a "capability-profile ref" while v1 ships no profiles | The field resolves to the Project Envelope in v1 and is reserved for post-v1 profiles | [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md) |
+| I6 | ADR-0006's `budget` field read like a cap | It is a spend-measurement declaration: measured, not capped (ADR-0004) | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
+| I7 | Ticket 009 had an egress approval adding a host to the allowlist outside the artifact | An approval persists as a PR against `envelope.dhall`; provisional application is recorded until merge | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md) |
+| I8 | The map's fog still listed the permission model as unspecified | v1's model is decided (ADR-0004); only post-v1 profiles remain open | [`map.md`](../wayfinding/map.md) |
 
-> map.md, Notes #12: "Daemon vs CLI: fetch both consumer models — sketch both in the spec, decide later."
-
-> ADR-0005: "Factory's process model is a single resident Go daemon on the owner's machine (systemd user unit) … the CLI is a client of a typed local JSON API over a Unix socket …"
-
-ADR-0005 (2026-11-18) postdates the note, and the map's own Decisions-so-far records ticket 010. This spec follows ADR-0005. The note needs amending by whoever maintains the map; until then it invites a reader to re-open a settled decision.
-
-### I2 — "Code-defined workflows" vs a Dhall data artifact
-
-> map.md, Destination: "deterministic workflows (code-defined, language TBD)"
-
-> map.md, Notes #3: "Workflows are **code-defined** (users write code calling agent primitives); workflow language is undecided."
-
-> CONTEXT.md: "**Workflow**: The code-defined, typed graph of stages a Task moves through in a Managed Project; the unit of project-defined behavior, not harness code."
-
-> ADR-0006: "Factory's Workflow Artifact is a `.factory/` directory committed in each Managed Project … The Go engine evaluates Dhall with `dhall-golang` and compiles it to a versioned IR."
-
-> Ticket 011: "Treat workflow orchestration as a **Go-owned, versioned typed graph**, not as arbitrary user code running inside the Go process."
-
-The authoring model that ships is typed declarative data, not code calling primitives. This spec uses the glossary term Workflow but describes authorship per ADR-0006; "code-defined" is read as "defined in version-controlled files rather than a UI". If that reading is wrong, the map and glossary need an amendment — not a change in this spec.
-
-### I3 — Embedded OpenCode SDK vs a managed server
-
-> Ticket 002: "Use OpenCode's embedded SDK (`@opencode/sdk`) to host agent sessions in-process … Prefer the embedded SDK for the first implementation."
-
-> Ticket 006: "ticket 007's deferred OpenCode-seam question is answered (managed server + API, not embedded SDK)."
-
-> ADR-0002: "OpenCode is the v1 adapter, run as a Factory-managed server per instance and spoken to over its API".
-
-Ticket 006 explicitly supersedes ticket 002 on this point. The spec follows ADR-0002; ticket 002 is still the better source for the control-plane/runtime boundary.
-
-### I4 — "Per-agent capability control" in the destination vs containment-first v1
-
-> map.md, Destination: "across multiple managed projects, each with its own tracker adapter, with per-agent capability control."
-
-> ADR-0004: "Factory's v1 controls agency through the sandbox boundary rather than tool-level allowlists. … Role profiles are deferred to post-v1 as narrower envelopes compiled into the same surface."
-
-The destination describes the eventual product; v1 controls per project, not per agent. This spec's containment section is per project, and §5.9 records the post-v1 direction.
-
-### I5 — "Capability-profile ref" in the adapter contract vs no profiles in v1
-
-> Ticket 006: "typed **Task in** (prompt, workspace ref, capability-profile ref, budget) → typed **Outcome out** …"
-
-> ADR-0004: "Role profiles are deferred to post-v1 as narrower envelopes compiled into the same surface."
-
-The field stays in the contract so profiles can fill it later; in v1 it carries the Project Envelope reference. This is a naming-scope tension, not a behavioral one.
-
-### I6 — Envelope `budget` vs "measured, not capped"
-
-> ADR-0006: "`envelope.dhall` (clone mode, network tier and allowlist, budget, secret names)"
-
-> ADR-0004: "Spend is measured per Task but not capped in v1; runaways are visible, not prevented."
-
-The `budget` field is a measurement declaration in v1 (the prototype compiles it as `budget.measure = true`). No cap semantics may be inferred from the name.
-
-### I7 — Egress approval writes the allowlist vs the artifact as sole source of truth
-
-> Ticket 009: "approval adds the host to the project's allowlist, denial is recorded, and both decisions are measured."
-
-> ADR-0004 (rejecting outside configuration): "two sources of truth drift; the Workflow Artifact must remain authoritative."
-
-A runtime-only allowlist change would create exactly the drift ADR-0004 rejects. §5.6 makes the decision durable as an artifact PR and marks the immediate application provisional; that mechanism is a spec default, not a recorded decision.
-
-### I8 — The map's fog still lists the v1 permission model as unspecified
-
-> map.md, Not yet specified: "**Permission model for agents**: how profiles + always-ask interact with tracker permissions; exact autonomy levels. … exact profiles belong to ticket 009."
-
-> ADR-0004: "v1 is containment-first: no role-profile system." … "Inside that VM, agents run with full permissions over their own copy of the repo."
-
-> Ticket 009: "**Always-ask:** nothing beyond the merge Checkpoint. The VM bounds network, secrets, and clone; stage permissions bound Factory-mediated actions; every action is logged."
-
-Ticket 009 resolved this; the fog entry is stale. Only the post-v1 Capability Profile design remains unspecified (§9.2).
+One wording note that is not a conflict: ADR-0003 writes the Loop as "intake → triage → implement → gates → review → PR → merge", while CONTEXT.md names five Stages. Gates and PR are activities inside Stages, not extra Stages (§3.1).
 
 ---
 
