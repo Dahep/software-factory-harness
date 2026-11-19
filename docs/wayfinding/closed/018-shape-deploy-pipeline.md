@@ -1,6 +1,8 @@
 ---
 title: Shape the deploy pipeline (SSH to the Owner's machines)
 type: wayfinder:grilling
+assignee: done
+status: resolved
 blocked-by:
 - closed/010-decide-daemon-or-cli.md
 ---
@@ -18,3 +20,11 @@ Open questions to settle with the Owner:
 5. **Measurement.** What every deploy records (per-host outcome, duration, version), consistent with directive #15, and where it lives (daemon host vs project log).
 
 Research tickets worth loading: closed/017 (devvm secrets/SSH), closed/006 (runtime adapter), closed/010 (daemon). If the Owner's machines are the desktop (omarchy) and the VPS (hersan), the grilling should ground itself in those two real hosts.
+
+## Resolution
+
+**Ruled 2026-11-18 (HITL with the owner): deploy is out of scope for Factory.**
+
+The grilling settled a coherent design — a separate Owner-triggered Deploy Workflow in the Workflow Artifact, an explicit declared host inventory, execution from the daemon host over the host's SSH identity (the Project VM never holds deploy credentials), sequential per-host rollout with stop-on-failure, and a declared health check with optional declared rollback — and then the owner ruled the capability itself out of v1 and out of the spec's scope: **each managed project defines its own deploy path** (its own CI, e.g. GitHub Actions). Factory's Loop ends at merge.
+
+Map consequences: the destination no longer promises SSH-based machine deployment; standing note #7 records the ruling; the researched mechanics live here in case a future effort revisits the capability; the map's **Out of scope** section carries the ruling.

@@ -7,7 +7,7 @@ title: Chart the Factory — a user-defined agent harness for deterministic work
 
 ## Destination
 
-A **written spec of "Factory"**: a meta-harness that lets the owner define deterministic workflows (code-defined, language TBD) which orchestrate agent teams — implement, review, triage, monitor, log, deploy — across multiple managed projects, each with its own tracker adapter, with per-agent capability control and SSH-based machine deployment. The spec is ready to hand off for planning/building in a later effort. Scope note: it serves the owner first with a path to other users; it ships a first milestone (the issue-driven loop) and is designed-for self-hosting (Factory manages Factory) in the short term.
+A **written spec of "Factory"**: a meta-harness that lets the owner define deterministic workflows (code-defined, language TBD) which orchestrate agent teams — implement, review, triage, monitor, log — across multiple managed projects, each with its own tracker adapter, with per-agent capability control. Deployment is not the harness's concern: each managed project owns its deploy path (its own CI, e.g. GitHub Actions). The spec is ready to hand off for planning/building in a later effort. Scope note: it serves the owner first with a path to other users; it ships a first milestone (the issue-driven loop) and is designed-for self-hosting (Factory manages Factory) in the short term.
 
 ## Notes
 
@@ -20,7 +20,7 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
   4. Underlying harness = **hybrid, OpenCode-first** (ticket 006, 2026-11-18): Factory owns the deterministic control plane; OpenCode is the first `RuntimeAdapter`, run as a Factory-managed server per instance. ADR-0002.
   5. Factory should **self-track in the short term**; when working on other projects, agents report feedback as issues back to Factory's tracker.
   6. Steering/interaction data serves **mining into skills & workflow updates + observability** (tool calls, file access, network monitoring, debugging).
-  7. Deployment = SSH to the owner's machines, cloud optional.
+  7. Deployment is **each project's own concern** (ruled 2026-11-18, ticket 018): Factory's loop ends at merge; projects deploy via their own CI (e.g. GitHub Actions). SSH to the owner's machines remains a project-level practice, not a Factory workflow.
   8. First milestone = the **issue-driven loop** (issues → triage → implement → review → merge).
   9. Tracker adapters: pluggable interface; GitHub Issues (`gh`) as first implementation; Fizzy/Linear/others follow; permissions across trackers are a concern.
   10. Language comparison must include functional/memory-managed leaning: Roc, Mojo; also Go, TypeScript, others.
@@ -64,3 +64,4 @@ A **written spec of "Factory"**: a meta-harness that lets the owner define deter
 - Building the harness or an MVP inside this map — execution follows the spec in a later effort.
 - Product/UI design for other users — audience path is noted, but design starts after the owner's needs are fully specified.
 - Specific cloud-provider deploy integrations — v1 is SSH to the owner's machines, cloud is optional and unspecified.
+- **Deploy as a Factory capability** (closed ticket 018): the owner ruled that each managed project defines its own deploy path (e.g. GitHub Actions); Factory's loop ends at merge. The researched mechanics (owner-triggered deploy workflow, declared host inventory, daemon-host SSH, sequential stop-on-failure) are recorded in the closed ticket if a future effort revisits this.
