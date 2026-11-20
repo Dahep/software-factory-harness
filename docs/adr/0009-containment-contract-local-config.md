@@ -21,4 +21,4 @@ Each Managed Project's Workflow Artifact declares the **containment contract**: 
 - A rebuilt VM is seeded from the preset, `extra_allow`, the local devvm config, and the SQLite applied rules.
 - Capability Profiles remain post-v1 and narrow the contract and the local config; they do not reintroduce a budget.
 
-Status: accepted 2026-11-20 (architecture review, candidate 3: containment contract and local config).
+Status: accepted 2026-11-20 (architecture review, candidate 3: containment contract and local config; review record: PR #3).
