@@ -383,7 +383,7 @@ A Managed Project carries its Workflow Artifact as a committed directory, added 
 ```
 .factory/
   workflow.dhall   # stages, waves, gates and failure policies, checkpoints, concurrency, measures
-  roster.dhall     # Agent Roster: entries, ordered model lists (supplied by bindings), policy references, declared requirements
+  roster.dhall     # Agent Roster: entries, model lists from bindings, policy references, declared requirements
   bindings.dhall   # init data: models per seat, build/test commands, provider names/endpoints, provenance
   envelope.dhall   # clone mode, network tier and allowlist, secret names, spend measurement
   schema/          # the Dhall types the files import
@@ -419,7 +419,7 @@ Rules:
 - **Finite graphs.** Dhall has no general recursion. Runtime iteration is an explicit `ForEach` node over a prior typed output, with a declared bound and an engine-persisted cursor (ticket 011).
 - **CEL for guards only.** Guards are typed, side-effect-free, terminating expressions evaluated by the engine (ticket 011).
 - **IR is the contract.** The engine executes the IR, not Dhall. The IR is versioned independently of the Dhall standard (ticket 011, ADR-0006).
-- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a runtime configuration beside the artifact. `bindings.dhall` supplies each entry's ordered list at Project Init; the roster entry that consumes it is what compiles, so the list the IR selects from is always the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
+- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a runtime configuration beside the artifact. Each entry's ordered list lives in `bindings.dhall` (ADR-0007, ADR-0008); Project Init writes it, the roster entry that consumes it compiles it into the IR, so the list the engine selects from is the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
 - **Default is a seed.** `defaults/` is compiled in CI against fixture bindings; a project compiles its own `.factory/` with its own `bindings.dhall`. The project never reads `defaults/` at runtime.
 - **Fail closed.** An IR version the engine does not know, or an artifact that fails validation, refuses to start a Task; it never runs a best-effort interpretation.
 
@@ -469,6 +469,8 @@ Project Init renders the Default Workflow Artifact in [`defaults/`](../../defaul
 
 An upstream content change to `defaults/` does not propagate; the digest records what the project started from. A shape change is an IR major bump and a migration PR against the project's copy. Fallback models are added to an entry's ordered list by a roster or bindings PR.
 
+The content digest covers the default's source set — `workflow.dhall`, `roster.dhall`, `envelope.dhall`, `bindings.example.dhall`, and every file under `schema/`; `fixtures/` is test-only and excluded. It is SHA-256 over the covered files sorted by repository path, each contributing its path, a NUL byte, and its LF-normalized bytes, and it is written as `sha256:<hex>` **⟨default D12⟩**. A checkout on another platform therefore yields the same digest, and the golden-IR diff shows what a content change moved.
+
 ### 4.7 Measurement declarations
 
 A default metric set applies to every Run; per-Stage declarations are optional additions, and declaring none is valid (ADR-0006, ticket 016). A Stage with no explicit measures is measured by the default set; a Stage that declares measures adds built-in metric keys from §6.4. A new semantic key is post-v1. The default artifact declares the default set; the prototype's stage-specific ids are not carried. The prototype's validator **failed** an unmeasured Stage (mandatory measures were the earlier requirement); ADR-0006 later made declarations optional, so that strictness is not carried into v1 — the check remains an authoring aid only.
@@ -481,12 +483,12 @@ The compiler and IR validator reject:
 - a Gate or Stage with no Failure Policy, or a Failure Policy with an unbounded retry/return;
 - a Checkpoint naming no Stage, or asking for an artifact no Stage produces;
 - a Wave entry naming no Roster Entry, or an entry missing its role or persona;
-- a Roster Entry with an empty model list, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
+- a Roster Entry whose compiled model list is empty, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
 - an entry whose declared secret names or hosts are not granted by the Envelope;
 - an entry whose policy reference does not resolve to the project policy (the Project Envelope in v1; a Capability Profile post-v1);
 - a Workflow element without a unique node id;
 - a measure id that is not a built-in semantic key (§6.4);
-- a `bindings.dhall` with missing or malformed provenance: an `irVersion` the engine does not know, or a value that is not a well-formed content digest;
+- a `bindings.dhall` with missing or malformed provenance: an `irVersion` the engine does not know, or a value that is not a well-formed `sha256:<hex>` content digest (§4.6);
 - a Gate check referencing an unknown check class or malformed parameters;
 - a `ForEach` without a bound;
 - concurrency below 1;
@@ -874,6 +876,7 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D9 | CLI verb and command names beyond the three ticket-010 names | §7.3 |
 | D10 | Init blocks and opens no PR when no provider is configured or live validation fails | §7.1 |
 | D11 | Build/test commands default to `make build` / `make test` | §7.1 |
+| D12 | Content digest: SHA-256 over the default's source set, sorted by path, LF-normalized | §4.6 |
 
 ---
 

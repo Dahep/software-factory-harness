@@ -22,4 +22,4 @@ Factory ships one **Default Workflow Artifact** in `defaults/`: the typed workfl
 - Project Init writes `bindings.dhall`; it does not copy an old default or upgrade one silently.
 - ADR-0007 recorded Project Init writing provider secret names and endpoints into `envelope.dhall`; that clause is superseded: init copies the default envelope and writes provider names and endpoints into `bindings.dhall`, while the Envelope still declares the grants (the spec's §4.4).
 
-Status: accepted 2026-11-20 (architecture review, candidate 2: default artifact).
+Status: accepted 2026-11-20 (architecture review, candidate 2: default artifact; review record: PR #2).

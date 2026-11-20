@@ -65,7 +65,7 @@ The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; Wave
 _Avoid_: runtime configuration, agent config, team
 
 **Roster Entry**:
-One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
+One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
 _Avoid_: agent config, worker
 
 **Model Catalog**:

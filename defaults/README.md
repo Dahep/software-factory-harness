@@ -33,12 +33,12 @@ defaults/
 }
 ```
 
-The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity`, and `reviewer-adversarial`; the binding keys above map to them. Each entry's ordered model list is what `bindings.dhall` supplies, so the roster entry stays the one the IR selects from. Fallback models are added to a seat's list by a later roster or `bindings.dhall` PR. Secret values never appear here; the Envelope names secrets, and the harness or devvm host-side store holds them.
+The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity`, and `reviewer-adversarial`; the binding keys above map to them. Each entry's ordered model list lives in `bindings.dhall`, so the roster entry stays the selector the IR compiles. Fallback models are added to a seat's list by a later roster or `bindings.dhall` PR. Secret values never appear here; the Envelope names secrets, and the harness or devvm host-side store holds them.
 
 ## Versioning
 
 - **Shape** is the IR major (`factory-ir/v1`). A shape change is a new IR major; a project adopts it through a migration PR against its `.factory/` copy.
-- **Content** is the default's digest: the digest of the source files in this directory (workflow, roster, envelope, schema, bindings example). Prompts, gate commands, default labels, and model defaults can change in place; the digest changes and the golden-IR diff shows what moved.
+- **Content** is the default's digest: SHA-256 over `workflow.dhall`, `roster.dhall`, `envelope.dhall`, `bindings.example.dhall`, and every file under `schema/`, sorted by repository path, each contributing its path, a NUL byte, and its LF-normalized bytes, written as `sha256:<hex>` (the spec's §4.6). `fixtures/` is excluded. Prompts, gate commands, default labels, and model defaults can change in place; the digest changes and the golden-IR diff shows what moved.
 - There is one live `defaults/` directory. Old defaults stay in git history; tag them if a human-readable reference is wanted. Do not create `defaults/v1/` and `defaults/v2/` unless two shapes must be served at once.
 
 ## Golden IR

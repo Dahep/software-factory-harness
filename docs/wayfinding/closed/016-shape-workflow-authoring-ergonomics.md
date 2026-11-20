@@ -34,3 +34,5 @@ Deliverable: a prototype artifact (rough loop definitions in the top two candida
 6. **Prototype capture.** `prototype/workflow-authoring/` holds the YAML+Schema version, the Dhall sketch, the compiled IR, and `validate.py`; its first run caught an unbounded `returnTo` — the case for schema-checked authoring, now native in Dhall.
 
 **Amendment (2026-11-19).** Item 2's `.factory/` directory gains `roster.dhall` (ADR-0007); the Agent Roster compiles with the workflow and envelope into the IR.
+
+**Amendment (2026-11-20).** Item 2's `.factory/` also carries `bindings.dhall` and is rendered from the Default Workflow Artifact in `defaults/`, which ships a fixture golden IR and a content digest (ADR-0008). Item 4's copy-on-init answer stands, with one boundary that decision fixed: the two lifecycle labels (`needs-triage`, `ready-for-agent`) are the whole v1 label set, so renaming label or workflow-state names is post-v1 rather than a copy deviation.
