@@ -56,12 +56,16 @@ _Avoid_: phase, step
 The set of agent sessions dispatched together within a Stage for one Task, defined by the Workflow (e.g. one implementer with two reviewers).
 _Avoid_: team, swarm, fan-out
 
+**Node**:
+A stable, addressable element of a Workflow — a Stage, Gate, Checkpoint, action, or agent entry — under which Runs, events, artifacts, and Gate reports are grouped.
+_Avoid_: step, task
+
 **Agent Roster**:
 The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; Wave entries select from it by id. It is part of the Workflow Artifact and compiles into the IR.
 _Avoid_: runtime configuration, agent config, team
 
 **Roster Entry**:
-One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
+One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
 _Avoid_: agent config, worker
 
 **Model Catalog**:
@@ -81,8 +85,12 @@ The typed result of the Triage Stage: suggested labels and priority, acceptance 
 _Avoid_: assessment, analysis
 
 **Workflow Artifact**:
-The version-controlled artifact a Managed Project carries in its own repository: its Workflow, Agent Roster, and Project Envelope, added by Project Init (ADR-0006, ADR-0007). Provider authentication is not part of the artifact; it stays harness- and host-side.
+The version-controlled artifact a Managed Project carries in its own repository: its Workflow, Agent Roster, bindings, and Project Envelope, rendered from the Default Workflow Artifact by Project Init (ADR-0006, ADR-0007, ADR-0008). Provider authentication is not part of the artifact; it stays harness- and host-side.
 _Avoid_: config file, pipeline definition
+
+**Default Workflow Artifact**:
+The versioned seed Factory ships in `defaults/` and Project Init renders into a Managed Project's `.factory/`; a project's copy is independent and adopts changes by PR.
+_Avoid_: template, scaffold, boilerplate
 
 **Project Init**:
 The act of adopting a repository as a Managed Project: Factory validates the configured harness, renders the Workflow Artifact (including the Agent Roster's primary models), proposes one init PR, the Owner merges it, and the project becomes manageable.
@@ -99,6 +107,10 @@ _Avoid_: hallucination, error
 **Owner**:
 The person Factory serves: the author of workflows and the authority at Checkpoints.
 _Avoid_: user, admin, operator
+
+**Project Assistant**:
+The post-v1 per-project client that answers questions, creates Issues and proposes Workflow Artifact PRs on the Owner's confirmation, and talks to a waiting Run; not a Workflow Stage and not a Roster Entry.
+_Avoid_: chatbot, console agent
 
 **Run**:
 One execution of a Task (or of a Stage's Wave) recorded in Factory's durable history.

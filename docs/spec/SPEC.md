@@ -1,6 +1,6 @@
 # Factory — Specification (v1)
 
-**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007)
+**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007) and 2026-11-20 (ADR-0008)
 
 **Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. The conflicts found while writing it were reconciled against the ADRs and are recorded, with the artifacts changed, in §10. Bare `ADR-000N` and `ticket NNN` references resolve through §11; load-bearing claims link their path directly.
 
@@ -34,12 +34,13 @@ The path to other users is preserved by four seams, not by designing for them no
 | Durable state | One SQLite (WAL) database: append-only transition log, projections, snapshots | ADR-0002, ADR-0005 |
 | Runtime | `RuntimeAdapter` seam; OpenCode as the one real adapter; a test double proves the seam | ADR-0002 |
 | Agent Roster | `.factory/roster.dhall`: project-owned entries, ordered model lists, policy references; Wave entries select by id; compiled into the IR | ADR-0007 |
+| Default artifact | `defaults/`: typed workflow, roster, envelope, schema, bindings; fixture golden IR in CI; Project Init renders it into a project copy | ADR-0008 |
 | Containment | One Project VM (devvm) per Managed Project; Project Envelope compiled from the artifact | ADR-0004, ticket 017 |
 | Tracker | GitHub Issues via `gh`; adapter interface designed for others | ticket 003, ticket 008 |
 | Loop | intake → triage → implement → gates → review → PR → merge, Owner at two Checkpoints | ADR-0003 |
 | Default Wave | one implementer, two reviewers (spec-fidelity + adversarial), as Workflow data | ticket 008 |
 | Gates | deterministic, harness-enforced, each with a Workflow-defined Failure Policy | ADR-0003 |
-| Adoption | Project Init PR adds `.factory/`; copy-on-init; deviation by PR | ADR-0006 |
+| Adoption | Project Init PR renders `.factory/` from `defaults/`; copy-on-init; deviation by PR | ADR-0006, ADR-0008 |
 | Measurement | append-only log, default metric set, Agent Confusion proxies | ticket 004, ticket 008 |
 | Self-hosting | Factory's repository is Subproject one; manual first build, then self-driven | ticket 008 |
 
@@ -57,6 +58,7 @@ Out of scope by decision, not by omission:
 - **Webhooks and public ingress.** Intake polls; webhooks are post-v1 (ADR-0005).
 - **External-server mode.** OpenCode runs as a Factory-managed server per Project VM; attaching to an existing external server is post-v1 (ticket 006).
 - **Owner TUI/web UI.** The CLI is the surface; TUI and web clients arrive on the same API (ADR-0005).
+- **Project Console, Node View, and Project Assistant.** v1 is CLI only; the post-v1 direction is §7.4.
 - **Spend caps.** Spend is measured per Task, not capped (ADR-0004).
 - **Post-merge monitoring and fix cycles**, and **sub-Issue decomposition in Triage** (ticket 008).
 - **Code-mode / sandboxed composition** as a Workflow layer. The pattern is reserved as a future adapter capability; an LLM-authored script is never the Workflow and never a Gate (ADR-0002, ticket 015).
@@ -72,7 +74,7 @@ v1 is done when, on Factory's own repository as a Managed Project, all of the fo
 3. A daemon restart mid-Task either resumes from the last transition or parks the Task Blocked with evidence; no Task is silently re-dispatched (ADR-0005).
 4. Every Run carries the default metric set, including the six Agent Confusion proxies.
 5. Each blocked egress attempt that needed a decision has a recorded Egress Request outcome.
-6. The Dhall conformance gate is green in CI, and the default Workflow Artifact compiles to the IR the engine executes.
+6. The Dhall conformance gate is green in CI, and the Default Workflow Artifact at `defaults/` compiles to its committed golden IR, `defaults/fixtures/golden.ir.json`.
 7. A Workflow Artifact change lands only through a PR against the Managed Project's copy.
 
 ---
@@ -195,6 +197,7 @@ The adapter is a translation and authorization boundary, not a lowest-common-den
 | --- | --- |
 | `capabilities()` | Report read/write fidelity per operation; Factory refuses what the provider cannot do instead of emulating it |
 | `listIssues`, `getIssue` | Intake polling and reconciliation |
+| `createIssue` | One caller in v1: a Failure Policy opening a follow-up Issue (§3.6); otherwise the Owner creates Issues in the tracker. The post-v1 Project Assistant adds confirmed assistant-initiated creation (§7.4) |
 | `updateIssue`, `transitionIssue` | Labels, workflow state, close — **through Factory only** |
 | `assign` / `unassign` | Available; the v1 Loop does not assign agents to Issues |
 | `listComments`, `addComment` | Agents may read and comment directly via `gh` inside the Project VM |
@@ -202,7 +205,7 @@ The adapter is a translation and authorization boundary, not a lowest-common-den
 | `listDependencies`, `addDependency`, `removeDependency` | Available; the v1 Loop does not consume blocking relations |
 | `authorize` | Early UX only; the harness re-checks every mutation immediately before the call |
 
-The adapter exposes more than the v1 Loop consumes (ticket 003): `assign` and dependency operations stay available without being Loop inputs.
+The adapter exposes more than the v1 Loop consumes (ticket 003): `assign` and dependency operations stay available without being Loop inputs. `createIssue` stays in the contract for the one caller v1 has — a Failure Policy opening a follow-up Issue (ticket 008) — and the Owner otherwise creates Issues in the tracker; assistant-initiated creation arrives with the post-v1 Project Assistant (§7.4).
 
 Rules: provider IDs stay opaque; provider-specific fields and events are preserved; unsupported operations are reported, never faked with tags or comments; important writes are verified by reading back (ticket 003).
 
@@ -230,7 +233,7 @@ The Loop has five Stages — Intake, Triage, Implement, Review, Merge — plus o
 | Review | reviewer (spec-fidelity), reviewer (adversarial) | `review-verdict` | — | Merge (after PR creation) |
 | Merge | none | `pr-open`, `checks-green` | merge-approval | Merged |
 
-Wave entries select a Roster Entry by id and cannot override its model, tools, or parameters; the role and persona in the table are the default entries' metadata (ADR-0007). Gate ids are the default artifact's; the names are IR-level, not harness constants. Every Stage emits the default metric set (§6.4); the artifact may add Stage measures (§4.7), and their ids live in the IR.
+Wave entries select a Roster Entry by id and cannot override its model, tools, or parameters; the role and persona in the table are the default entries' metadata (ADR-0007). Gate ids are the `defaults/` artifact's current values; the table documents the default, not the engine, and the names are IR-level, not harness constants. Every Stage emits the default metric set (§6.4); the artifact may add Stage measures (§4.7), and their ids live in the IR.
 
 ### 3.2 Task states
 
@@ -250,7 +253,7 @@ No Issue transition happens before the Triage Checkpoint (ADR-0004).
 
 ### 3.3 Intake
 
-The daemon polls the Managed Project's tracker on a configurable interval; webhooks are post-v1 (ADR-0005). New Issues enter Triage. The existing backlog is **not** swept: it stays out until labeled (ticket 008). Admission is by the Workflow's intake label; the default artifact names it, and it is distinct from the post-approval `ready-for-agent` label.
+The daemon polls the Managed Project's tracker on a configurable interval; webhooks are post-v1 (ADR-0005). New Issues enter Triage. The existing backlog is **not** swept: it stays out until labeled (ticket 008). Admission is by the Workflow's intake label; the `defaults/` artifact names it (`needs-triage`), and it is distinct from the post-approval `ready-for-agent` label. Those two are the v1 label set: renaming or adding labels is post-v1, when the tracker projection becomes data (ADR-0008).
 
 Intake is idempotent: an Issue is admitted once, keyed by provider reference. A re-poll, a daemon restart, or a duplicate webhook (post-v1) cannot admit it twice; **approval** is what creates the Task.
 
@@ -380,23 +383,26 @@ A Managed Project carries its Workflow Artifact as a committed directory, added 
 ```
 .factory/
   workflow.dhall   # stages, waves, gates and failure policies, checkpoints, concurrency, measures
-  roster.dhall     # Agent Roster: entries, ordered model lists, policy references, declared requirements
+  roster.dhall     # Agent Roster: entries, model lists from bindings, policy references, declared requirements
+  bindings.dhall   # init data: models per seat, build/test commands, provider names/endpoints, provenance
   envelope.dhall   # clone mode, network tier and allowlist, secret names, spend measurement
   schema/          # the Dhall types the files import
 ```
 
 **⟨default D8⟩** `schema/` also carries the artifact schemas the Gates validate (`TriageDecision`, review findings), so the artifact is self-contained. ADR-0006 requires `schema/` for the Dhall types; artifact schemas share it rather than becoming a second configuration surface.
 
+**Rendered from `defaults/`.** The project's `.factory/` is rendered from the Default Workflow Artifact (ADR-0008); the default itself is not part of the project artifact and does not propagate. `bindings.dhall` is the Project Init surface.
+
 **Agent Roster.** `.factory/roster.dhall` is part of the artifact (ADR-0007): a project-scoped, typed list of Roster Entries that Wave entries select by id. Provider authentication, tokens, and host credentials are not part of the artifact: the harness (OpenCode in v1) is configured host-side, the Envelope names the secrets, and Factory stores no values (§5.5).
 
-Reviewed as one PR at init; deviation — including a roster or model-list change — is a PR against the Managed Project's copy.
+Reviewed as one PR at init; deviation — including a roster, model-list, or bindings change — is a PR against the Managed Project's copy.
 
 ### 4.2 Compilation
 
 Dhall is the only frontend (ADR-0006). The compilation chain:
 
 ```
-workflow.dhall + roster.dhall + envelope.dhall + schema/
+workflow.dhall + roster.dhall + envelope.dhall + bindings.dhall + schema/
         │  dhall-golang: parse, typecheck, normalize
         ▼
    typed Dhall value
@@ -413,7 +419,8 @@ Rules:
 - **Finite graphs.** Dhall has no general recursion. Runtime iteration is an explicit `ForEach` node over a prior typed output, with a declared bound and an engine-persisted cursor (ticket 011).
 - **CEL for guards only.** Guards are typed, side-effect-free, terminating expressions evaluated by the engine (ticket 011).
 - **IR is the contract.** The engine executes the IR, not Dhall. The IR is versioned independently of the Dhall standard (ticket 011, ADR-0006).
-- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a runtime configuration beside the artifact. Model-list validity is a compile check; model availability is a dispatch-time fact.
+- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a runtime configuration beside the artifact. Each entry's ordered list lives in `bindings.dhall` (ADR-0007, ADR-0008); Project Init writes it, the roster entry that consumes it compiles it into the IR, so the list the engine selects from is the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
+- **Default is a seed.** `defaults/` is compiled in CI against fixture bindings; a project compiles its own `.factory/` with its own `bindings.dhall`. The project never reads `defaults/` at runtime.
 - **Fail closed.** An IR version the engine does not know, or an artifact that fails validation, refuses to start a Task; it never runs a best-effort interpretation.
 
 ### 4.3 IR shape
@@ -429,9 +436,10 @@ Top-level fields the IR must express (names follow the prototype's compiled sket
 | Concurrency | max in-flight Tasks |
 | Checkpoints | id → Stage, the artifacts asked for |
 | Stages | id, entry condition, Wave (agent entries: roster entry id; role/persona metadata), Gates (id, check class + parameters, Failure Policy with bounds), the Stage's Run-failure policy, Checkpoint, action, measures |
-| Measures | default set reference plus optional per-Stage additions |
+| Node identity | every Stage, Gate, Checkpoint, action, and agent entry has a stable id; its node path is parent + kind + id |
+| Measures | default set reference plus optional per-Stage additions; every measure id is a built-in semantic key (§6.4) |
 
-The roster is part of the IR; a Task pin therefore covers the models, tools, and permissions that execute it (ADR-0007, D3).
+The roster is part of the IR; a Task pin therefore covers the models, tools, and permissions that execute it (ADR-0007, D3). The default's golden IR asserts the node paths and metric keys; a project's IR is compiled at Task creation and pinned.
 
 ### 4.4 Project Envelope
 
@@ -457,13 +465,15 @@ The artifact is committed, so it never contains a secret value. It names secrets
 
 ### 4.6 Copy-on-init and deviation
 
-Project Init copies the default artifact — including the default Agent Roster, with a primary model rendered per default seat — into the Managed Project through a PR. There is no inheritance, `extends`, or override machinery: a Managed Project that wants a different Wave, an extra Gate, a different model list, or different tracker state names edits its own copy in a PR. This keeps one authoritative artifact per Managed Project and needs no merge semantics (ADR-0006, ADR-0007).
+Project Init renders the Default Workflow Artifact in [`defaults/`](../../defaults/README.md) into the Managed Project's `.factory/` through a PR: the typed workflow, roster, envelope, and schema are copied, and `bindings.dhall` carries the selected primary models, build/test commands, provider names/endpoints, and provenance (`irVersion` + content digest). There is no inheritance, `extends`, or override machinery: a Managed Project that wants a different Wave, an extra Gate, a different model list, or different bindings edits its own copy in a PR. This keeps one authoritative artifact per Managed Project and needs no merge semantics (ADR-0006, ADR-0007, ADR-0008).
 
-An upstream change to the default does not propagate. A project adopts it by PR against its own copy; fallback models are added to an entry's ordered list by a roster PR.
+An upstream content change to `defaults/` does not propagate; the digest records what the project started from. A shape change is an IR major bump and a migration PR against the project's copy. Fallback models are added to an entry's ordered list by a roster or bindings PR.
+
+The content digest covers the default's source set — `workflow.dhall`, `roster.dhall`, `envelope.dhall`, `bindings.example.dhall`, and every file under `schema/`; `fixtures/` is test-only and excluded. It is SHA-256 over the covered files sorted by repository path, each contributing its path, a NUL byte, and its LF-normalized bytes, and it is written as `sha256:<hex>` **⟨default D12⟩**. A checkout on another platform therefore yields the same digest, and the golden-IR diff shows what a content change moved.
 
 ### 4.7 Measurement declarations
 
-A default metric set applies to every Run; per-Stage declarations are optional additions, and declaring none is valid (ADR-0006, ticket 016). A Stage with no explicit measures is measured by the default set; a Stage that declares measures adds to it. The prototype's validator **failed** an unmeasured Stage (mandatory measures were the earlier requirement); ADR-0006 later made declarations optional, so that strictness is not carried into v1 — the check remains an authoring aid only.
+A default metric set applies to every Run; per-Stage declarations are optional additions, and declaring none is valid (ADR-0006, ticket 016). A Stage with no explicit measures is measured by the default set; a Stage that declares measures adds built-in metric keys from §6.4. A new semantic key is post-v1. The default artifact declares the default set; the prototype's stage-specific ids are not carried. The prototype's validator **failed** an unmeasured Stage (mandatory measures were the earlier requirement); ADR-0006 later made declarations optional, so that strictness is not carried into v1 — the check remains an authoring aid only.
 
 ### 4.8 Validation rules
 
@@ -473,9 +483,12 @@ The compiler and IR validator reject:
 - a Gate or Stage with no Failure Policy, or a Failure Policy with an unbounded retry/return;
 - a Checkpoint naming no Stage, or asking for an artifact no Stage produces;
 - a Wave entry naming no Roster Entry, or an entry missing its role or persona;
-- a Roster Entry with an empty model list, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
+- a Roster Entry whose compiled model list is empty, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
 - an entry whose declared secret names or hosts are not granted by the Envelope;
 - an entry whose policy reference does not resolve to the project policy (the Project Envelope in v1; a Capability Profile post-v1);
+- a Workflow element without a unique node id;
+- a measure id that is not a built-in semantic key (§6.4);
+- a `bindings.dhall` with missing or malformed provenance: an `irVersion` the engine does not know, or a value that is not a well-formed `sha256:<hex>` content digest (§4.6);
 - a Gate check referencing an unknown check class or malformed parameters;
 - a `ForEach` without a bound;
 - concurrency below 1;
@@ -614,19 +627,22 @@ Steers keep the human message in the transcript; the event carries the subtype (
 
 ### 6.4 Default metric set
 
-Applies to every Run; Stages may add, never subtract (ADR-0006, ticket 008). Metric ids are IR-level strings declared in the artifact; the names below define the semantics, not the ids.
+Applies to every Run; Stages may add, never subtract (ADR-0006, ticket 008). Each metric has one stable key, and that key is the id used in the artifact. The default artifact declares the set; a Stage may add built-in keys, but v1 allows no new semantic key.
 
-| Metric | Definition |
-| --- | --- |
-| Stage cycle time | Stage entry → exit transition, per Task; p50/p95 |
-| Gate verdicts | pass / deny / timeout counts and rates per Gate id |
-| Review findings | count and severity per Wave, per reviewer persona |
-| Retries | per Stage and per Task |
-| Tokens and cost | per Run, per Task, per Roster Entry, per resolved model, per Managed Project |
-| Model resolution | fallback attempts and exhausted lists per Run and Roster Entry; provider error classes; fallback rate |
-| PR merge latency | PR opened → merge transition |
-| Tool error rate | failed or denied tool calls per Run, normalized by operation |
-| Agent Confusion proxies | six proxies below |
+| Key | Metric | Definition |
+| --- | --- | --- |
+| `stage.cycle_time` | Stage cycle time | Stage entry → exit transition, per Task; p50/p95 |
+| `gate.verdict` | Gate verdicts | pass / deny / timeout counts and rates per Gate id |
+| `review.findings` | Review findings | count and severity per Wave, per reviewer persona |
+| `run.retries` | Retries | per Stage and per Task |
+| `run.tokens` | Tokens | per Run, per Task, per Roster Entry, per resolved model, per Managed Project |
+| `run.cost` | Cost | per Run, per Task, per Roster Entry, per resolved model, per Managed Project |
+| `model.resolution` | Model resolution | fallback attempts and exhausted lists per Run and Roster Entry; provider error classes; fallback rate |
+| `pr.merge_latency` | PR merge latency | PR opened → merge transition |
+| `tool.error_rate` | Tool error rate | failed or denied tool calls per Run, normalized by operation |
+| `agent.confusion_proxies` | Agent Confusion proxies | six proxies below |
+
+The default artifact's `measures` list is exactly this key set; the golden IR asserts it.
 
 **Agent Confusion** is a measured property, expressed through proxies, never a subjective score ([`CONTEXT.md`](../../CONTEXT.md)):
 
@@ -694,19 +710,19 @@ Adopting a repository as a Managed Project is a PR, not a console wizard ([`CONT
 
 1. The Owner registers the repository and its tracker with Factory.
 2. The Owner configures the harness host-side (OpenCode in v1): adds provider authentication and verifies the models Factory may offer. Factory stores no secret values.
-3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, asks for a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)), renders `.factory/roster.dhall`, writes the configured providers' secret names and endpoints into `envelope.dhall`, and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR. **⟨default D10⟩**
+3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, and asks for a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)) and for build/test commands, defaulting to `make build` / `make test` **⟨default D11⟩**. It renders `defaults/` into the project's `.factory/`, writes `bindings.dhall` with the selected models, commands, provider names/endpoints, and provenance (`irVersion` + content digest), and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR. **⟨default D10⟩**
 4. The Owner reviews and merges the init PR. The repository is now a Managed Project.
 5. Secret **values** are entered in the harness or devvm host-side store under the names the artifact declares; no value enters Factory, the repository, the VM, or a log.
 6. Branch protection is verified: merges restricted to Factory's identity; the project token cannot merge.
 7. The Project VM is created on first work, with the Envelope compiled.
 
-Fallback models are added to an entry's ordered list by a later roster PR, not during init. Until step 4 merges, Factory may report on the project but creates no Tasks: the artifact is the contract.
+Fallback models are added to an entry's ordered list by a later roster or bindings PR, not during init. Until step 4 merges, Factory may report on the project but creates no Tasks: the artifact is the contract.
 
 ### 7.2 Factory as Subproject one
 
 Factory's own repository is the first Managed Project ([`CONTEXT.md`](../../CONTEXT.md), ticket 008):
 
-- **Bootstrap period.** The initial build is manual: a human writes the daemon, the adapter, and the default artifact (workflow, roster, envelope), and merges them without the Loop.
+- **Bootstrap period.** The initial build is manual: a human writes the daemon, the adapter, and the Default Workflow Artifact in `defaults/` (workflow, roster, envelope, bindings, schema, golden IR), and merges them without the Loop.
 - **Handover.** Once the artifact is merged and the daemon can run the Loop, Factory drives changes to itself. From then on, work on Factory arrives as Issues and leaves as merged PRs like any other project.
 - **Roster changes.** Factory's own Agent Roster is an artifact like any other; a self-merged roster or model-list change takes effect for later Tasks (D3).
 - **Feedback routing.** Work done in another Managed Project files feedback about Factory as an Issue on Factory's tracker (map note #5). In v1 that is a convention, not a workflow Stage.
@@ -721,12 +737,20 @@ Ticket 010 names `factory inbox`, `factory approve …`, and `factory egress all
 | `factory inbox` | Checkpoints, Blocked Tasks, Egress Requests |
 | `factory approve <checkpoint>` | Record a Checkpoint decision, with edits or reason |
 | `factory egress allow` / `factory egress deny` | Decide an Egress Request; both outcomes recorded |
-| `factory init` | Validate the configured harness, select a primary model per default seat, render the roster, and open the init PR (interactive or flags) |
+| `factory init` | Validate the configured harness, select a primary model per default seat and build/test commands, render `defaults/` into `.factory/`, and open the init PR (interactive or flags) |
 | `factory models` | List the adapter's Model Catalog and current availability |
 | `factory status` | Task/Run state, Gate reports, metrics |
 | `factory workflow validate` | Compile and validate the artifact before a PR |
 
 All are clients of the same API; none reads the database.
+
+### 7.4 Post-v1: Project Console and Project Assistant
+
+v1 ships the CLI only. Three post-v1 clients consume the same API and do not change the control plane: the **Project Console** (a per-project browser client for Tasks, Runs, Gate reports, and metrics), the **Node View**, and the **Project Assistant**. They are scoped per Managed Project first; a Factory-wide overview is later.
+
+- **Node View.** One node at a time — any element the Workflow defines: a Stage, Gate, Checkpoint, action, or agent entry. It groups the node's Runs, model attempts, activity events, artifacts, Gate reports, and transcript references, and can follow the Run's normalized event stream live. The node path is stable in the IR (v1); the run/event path columns and the view itself are post-v1. A rich view depends on the observability schema fog (§9.1).
+- **Project Assistant.** A per-project client, not a Workflow Stage and not a Roster Entry. It reads project state and a node's work; it may create an Issue (recorded, with the intake label), propose a `.factory/` change as a PR, and send a message to a waiting Run — each with Owner confirmation. Its answer to a question is a transient artifact the Owner can view and discard; there is no separate report capability. It never merges, transitions the tracker, advances Workflow state, holds the Project VM's credentials, or records a Checkpoint decision on the Owner's behalf.
+- **Waiting-agent conversation.** When an agent waits for a human, its Run enters `waiting_for_human`; the Task may be Blocked or still in its Stage. The Owner's message is a recorded command; the adapter steers or resumes the session, and the conversation lands in the transcript and activity log. A conversation can unblock or inform the agent, but it cannot advance the Workflow; a Checkpoint decision remains a separate harness record. If the session is gone, the conversation is not possible: the Task is Blocked with evidence and resumes per policy with a fresh session and handoff summary.
 
 ---
 
@@ -738,11 +762,12 @@ All are clients of the same API; none reads the database.
 | --- | --- |
 | Go toolchain and a single daemon binary | ADR-0001; static distribution, goroutines, official MCP/provider SDKs if needed |
 | SQLite with WAL | ADR-0005; one writer, one backup file |
-| `dhall-golang` **conformance gate** | ADR-0006: the build fails if the binding cannot evaluate the artifact schema (workflow, roster, envelope). There is no second frontend |
+| `dhall-golang` **conformance gate** | ADR-0006: the build fails if the binding cannot evaluate the artifact schema (workflow, roster, envelope, bindings) or the default's canonical compile differs from its golden IR (§8.2). There is no second frontend |
 | `cel-go` | guards (ticket 011) |
 | OpenCode, **pinned version** | ADR-0002; contract tests against the pinned API surface, not "latest" (ticket 002) |
 | Configured harness provider (OpenCode in v1) with access to the selected models | Project Init validates it live; Factory stores no secret values (ADR-0007) |
 | Adapter Model Catalog (static descriptor + live availability) | Compile-time roster validation and `factory init` model selection (ADR-0007) |
+| Default Workflow Artifact at `defaults/` with its golden IR | Project Init renders it; the conformance gate compiles it (ADR-0008) |
 | devvm **≥ 0.1.1**, CLI only | ticket 017; 0.1.0 predates custom secrets, the 17-VM cap, and the split proxy |
 | Linux host with Lima + QEMU/KVM | devvm's only backend (ticket 017) |
 | `gh` authenticated on the daemon host | tracker polling, PR creation, squash merge |
@@ -754,12 +779,13 @@ All are clients of the same API; none reads the database.
 
 A CI job, not a runtime hope:
 
-1. Evaluate the `schema/` types and the default `workflow.dhall` + `roster.dhall` + `envelope.dhall` with the pinned `dhall-golang`.
+1. Evaluate `defaults/schema/` and `defaults/workflow.dhall` + `defaults/roster.dhall` + `defaults/envelope.dhall` with `defaults/fixtures/bindings.dhall`, using the pinned `dhall-golang`.
 2. Decode the result into the Go IR.
 3. Validate roster references against the adapter's pinned Model Catalog descriptor, then run the IR validator (§4.8).
-4. Fail the build on any error, with the Dhall diagnostics attached.
+4. Canonicalize the IR and compare it to `defaults/fixtures/golden.ir.json`; fail on any difference.
+5. Fail the build on any error, with the Dhall diagnostics attached.
 
-The static descriptor declares model IDs, providers, capabilities, and tool classes, and is pinned with the adapter; live availability is an init-time overlay, not a CI input, so a provider rotation cannot fail the build.
+The static descriptor declares model IDs, providers, capabilities, and tool classes, and is pinned with the adapter; live availability is an init-time overlay, not a CI input, so a provider rotation cannot fail the build. The golden IR is a fixture compile of the default, not a project's IR; a project compiles its own `.factory/` with its own `bindings.dhall`.
 
 The gate failing stops the build. It does not trigger a fallback frontend: the Owner took the Dhall decision with this risk in view (ADR-0006), and ticket 011's fallback order is a re-decision, not a quiet switch.
 
@@ -770,6 +796,7 @@ The gate failing stops the build. It does not trigger a fallback frontend: the O
 | devvm | ≥ 0.1.1 | CLI + `--json` version 1 (additive); re-pin only after a contract run |
 | OpenCode | one pinned release | contract tests for sessions, events, permissions, questions, model fallback order and exhaustion; capability descriptor records the version |
 | Model Catalog | adapter descriptor version | additive; unknown model IDs fail compile; live availability is not pinned |
+| Default artifact | `defaults/` + content digest | content changes update the digest; shape changes bump the IR major and migrate by PR |
 | IR | its own major version | engine refuses unknown versions |
 | Dhall standard | the subset `dhall-golang` supports | conformance gate proves the schema, not the standard |
 | Event envelope | `schema_version` 1 | additive changes bump the version |
@@ -809,14 +836,14 @@ The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later
 
 Dependency-ordered, each step ending in a verifiable state:
 
-1. Dhall conformance spike + IR validator + default artifact (workflow, roster, envelope) (the earliest failure is the cheapest).
+1. Dhall conformance spike + IR validator + Default Workflow Artifact in `defaults/` (workflow, roster, envelope, bindings, schema, golden IR) (the earliest failure is the cheapest).
 2. Transition log, projections, snapshots, API skeleton, CLI client.
 3. Fake `RuntimeAdapter` runs the Loop's state machine end to end with no real agent, including model fallback and exhaustion.
 4. devvm lifecycle + Envelope compilation + secret bindings.
 5. OpenCode adapter inside the Project VM; Model Catalog; contract tests.
 6. Tracker adapter, Gates, Checkpoints, PR, squash merge.
 7. Activity log, metric set, network-log ingestion.
-8. Project Init (guided provider validation and seat model selection); Factory registers itself; handover to self-driven.
+8. Project Init (guided provider validation, seat model and build/test command selection, `defaults/` rendering); Factory registers itself; handover to self-driven.
 
 ---
 
@@ -824,10 +851,11 @@ Dependency-ordered, each step ending in a verifiable state:
 
 ### 9.1 Fog
 
-Two questions remain unspecified in the record. This spec does not answer them.
+Three questions remain unspecified in the record. This spec does not answer them.
 
 1. **Observability schema detail.** The envelope's field names are decided (ticket 004, §6.2); its allowed-value enums, indexing, retention windows, and the queries mining runs over are not. Until they are, the log is a schema without an operational contract: implementers will otherwise invent value names and indexes that mining then depends on. Related detail: whether workflow facts (Gate verdicts, Checkpoints, effects) surface as additional activity kinds or stay transition-log-only.
 2. **Path-to-other-users surface.** Packaging, onboarding, the configuration surface a second Owner would need, multi-user auth, and how a second Owner's projects are isolated. The map defers design until the Owner's needs are fully specified; the four seams in §1.2 are what keeps the door open.
+3. **Project Assistant capability set.** Beyond the boundaries §7.4 records — never merge, never transition the tracker, never advance Workflow state, no Project VM credentials, no Checkpoint decision on the Owner's behalf — the assistant's tool surface, confirmation rules, and transient-artifact behavior are not specified.
 
 Everything else is deferred by decision; §1.4 is the authoritative list, and none of it is fog. Per-Run VMs are not a deferral: they remain an escalation option, unused by v1 (ticket 017).
 
@@ -847,12 +875,14 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D8 | Artifact schemas share `.factory/schema/` with the Dhall types | §4.1 |
 | D9 | CLI verb and command names beyond the three ticket-010 names | §7.3 |
 | D10 | Init blocks and opens no PR when no provider is configured or live validation fails | §7.1 |
+| D11 | Build/test commands default to `make build` / `make test` | §7.1 |
+| D12 | Content digest: SHA-256 over the default's source set, sorted by path, LF-normalized | §4.6 |
 
 ---
 
 ## 10. Reconciliations
 
-The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; no other decision was reversed. I7's amendment replaces ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009.
+The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership. No other decision was reversed. I7's amendment replaces ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009.
 
 | # | Was | Resolution | Artifact changed |
 | --- | --- | --- | --- |
@@ -866,6 +896,7 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I8 | The map's fog still listed the permission model as unspecified | v1's model is decided (ADR-0004); only post-v1 profiles remain open | [`map.md`](../wayfinding/map.md) |
 | I9 | The glossary defined the Workflow Artifact as the Workflow plus runtime configuration; ADR-0006 defines it as the `.factory/` directory | The artifact is `.factory/`; runtime configuration is a separate Factory-managed, versioned artifact per Managed Project (ADR-0002), and the glossary now says so. This split is superseded by I10 | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
+| I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a harness action between Review and Merge, with Gate evaluation inside Stages (§3.1).
 
@@ -884,6 +915,7 @@ I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) an
 | [`docs/adr/0005`](../adr/0005-resident-daemon-thin-clients.md) | Daemon, CLI, SQLite, polling, reconcile-and-resume, VM idle stop |
 | [`docs/adr/0006`](../adr/0006-dhall-authoring-factory-directory.md) | `.factory/`, Dhall → IR, secrets by name, copy-on-init, optional measures |
 | [`docs/adr/0007`](../adr/0007-agent-roster-in-workflow-artifact.md) | Agent Roster in `.factory/`, selection by id, ordered model lists, typed failure to the Stage |
+| [`docs/adr/0008`](../adr/0008-default-artifact-deliverable.md) | Default artifact in `defaults/`; bindings; golden IR; content digest; migrations |
 | [`closed/001`](../wayfinding/closed/001-research-harness-language.md) | Go core recommendation; workflow-authoring question deferred (superseded in part) |
 | [`closed/002`](../wayfinding/closed/002-research-build-vs-opencode-plugins.md) | Control-plane/runtime boundary; effect-runner discipline |
 | [`closed/003`](../wayfinding/closed/003-research-tracker-adapters-and-permissions.md) | Tracker adapter contract; harness-gated mutations |
@@ -903,5 +935,6 @@ I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) an
 | [`closed/017`](../wayfinding/closed/017-research-devvm-sandboxing.md) | Project VM granularity; secrets; network log; Linux gaps; 17-VM cap |
 | [`closed/018`](../wayfinding/closed/018-shape-deploy-pipeline.md) | Deploy ruled out; researched mechanics preserved |
 | [`prototype/workflow-authoring/`](../../prototype/workflow-authoring/README.md) | Evidence for authoring ergonomics, IR shape, and the unbounded-`returnTo` catch |
+| [`defaults/README.md`](../../defaults/README.md) | Default artifact contract: layout, bindings, golden IR, metric keys, labels, node ids |
 | [`docs/wayfinding/map.md`](../wayfinding/map.md) | Destination, Owner inputs, decisions, fog, out of scope |
 | [`CONTEXT.md`](../../CONTEXT.md) | Glossary: the binding vocabulary |
