@@ -18,8 +18,8 @@ Each Managed Project's Workflow Artifact carries an **Agent Roster**: `.factory/
 - Project Init becomes a guided bind → render → PR flow: validate the configured harness, choose a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)), render the roster, and write the configured providers' secret names and endpoints into the envelope in one PR. Fallbacks are added later by a roster PR.
 - The IR carries the roster and its instructions content-addressed, so a roster change affects later Tasks only.
 - The adapter Outcome contract gains a failure-reason taxonomy and an attempt trail, delivered with every Outcome; the default metric set gains model resolution.
-- A Stage gains a Failure Policy for Run-level failures outside its Gates (model exhaustion, a crashed Run), so a typed adapter failure has a defined disposition.
+- A Stage gains a mandatory Failure Policy for Run-level failures outside its Gates (model exhaustion, a crashed Run); the Workflow cannot compile without handling them, so a typed adapter failure has a defined disposition rather than failing the Workflow.
 - Capability Profiles attach to a Roster Entry's policy reference post-v1; in v1 every entry resolves to the project-wide policy (ADR-0004).
 - Factory stores no secret values: the Envelope names them, and the harness or devvm host-side store holds them.
 
-Status: accepted 2026-11-19 (architecture review, candidate 1: runtime configuration).
+Status: accepted 2026-11-19 (architecture review, candidate 1: runtime configuration; review record: PR #1).
