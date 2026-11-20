@@ -127,3 +127,19 @@ _Avoid_: attempt, execution, session
 **RuntimeAdapter**:
 The seam through which Factory delegates agent execution to a runtime; it normalizes runtime behavior into Factory's task/outcome vocabulary.
 _Avoid_: provider, integration, driver
+
+**Client Contract**:
+The versioned contract every Factory client speaks — `factory-api/v1`: commands, queries, and subscriptions over HTTP/JSON on a Unix socket, with receipts whose intent is co-committed to its transition, and two feeds (durable state, live telemetry), specified in [`docs/spec/API.md`](docs/spec/API.md). The CLI is its first client, and a fake second client proves the seam.
+_Avoid_: API, endpoint list, RPC layer
+
+**Client operation**:
+One call in the Client Contract, of exactly three kinds. A **command** asks Factory to record a decision or perform an effect; it carries a client-generated idempotency key and answers with a persisted receipt, and it applies at most once per key. A **query** is side-effect free, reads a projection, and returns the transition-log sequence it read at, so a client can join a read to a feed with no gap or duplicate. A **subscription** opens a feed and streams frames until closed, resuming by cursor rather than by key. "Command" as a Client Contract kind is not a build/test command in `bindings.dhall`.
+_Avoid_: mutation, action, request, GET
+
+**Receipt**:
+The durable record of a command — idempotency key, operation, request digest, actor and client identity, recorded response, and the transition it produced — written in two commits: inserted with the intent transition, then updated with the effect's outcome. A retry returns it instead of re-applying the command.
+_Avoid_: log entry, acknowledgement
+
+**Feed**:
+One of the two streams a subscription follows. The **durable feed** is the transition log: gapless, replayable after a snapshot, resumed by log sequence, and a lagging subscriber is disconnected rather than skipped. The **live telemetry feed** is the activity event log: lossy, always reporting its gaps and drops, and never Workflow state.
+_Avoid_: event bus, channel, topic

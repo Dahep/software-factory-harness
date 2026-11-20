@@ -17,4 +17,6 @@ Factory's process model is a single resident Go daemon on the owner's machine (s
 - Idle Project VMs stop; task start pays a VM start cost.
 - Deploy-pipeline design becomes specifiable (its last dependency was this decision).
 
-Status: accepted 2026-11-18 (wayfinder ticket: resident daemon vs CLI/cron).
+**Amendment (2026-11-20, ADR-0010).** No decision here is reversed; the client surface is specified. "Typed local JSON API" is the **Client Contract** (`factory-api/v1`): commands, queries, and subscriptions, with the operation id as the identity and JSON Schema as the field-level contract. "Persisted receipts" are rows in this SQLite database, inserted with the intent transition and updated with the effect's outcome. "Snapshots + subscriptions" is two feeds with different guarantees — the durable feed (gapless, replayable after a snapshot, cursor-resumed) and the live telemetry feed (lossy, reporting its loss). "Scoped owner session" is a per-start bearer token file at `0600` with a Linux `SO_PEERCRED` check and declared operation scopes whose v1 grants are broad. The contract itself is [`docs/spec/API.md`](../spec/API.md).
+
+Status: accepted 2026-11-18 (wayfinder ticket: resident daemon vs CLI/cron). Amended 2026-11-20: the client surface is specified as the Client Contract, two feeds, receipts co-committed with their intent transitions (ADR-0010); no decision reversed.

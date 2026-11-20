@@ -1,8 +1,10 @@
 # Factory — Specification (v1)
 
-**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007), 2026-11-20 (ADR-0008), 2026-11-20 (ADR-0009), and 2026-11-20 (post-v1 clarification conversations)
+**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007), 2026-11-20 (ADR-0008), 2026-11-20 (ADR-0009), 2026-11-20 (post-v1 clarification conversations), and 2026-11-20 (ADR-0010, the client contract)
 
 **Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. The conflicts found while writing it were reconciled against the ADRs and are recorded, with the artifacts changed, in §10. Bare `ADR-000N` and `ticket NNN` references resolve through §11; load-bearing claims link their path directly.
+
+**One companion document.** The client boundary's contract — envelopes, operations, receipts, feeds, errors, versioning, auth — is specified in [`docs/spec/API.md`](API.md) and decided by ADR-0010. This spec summarises it in §2.7 and maps the CLI onto it in §7.3; where the two disagree about the client boundary, `API.md` wins and the spec is the defect.
 
 **Spec defaults.** Sentences marked **⟨default Dn⟩** are choices this spec makes where the source artifacts are silent — scheduler ordering, denial paths, timeouts, and similar build-time detail. They are review targets, not recorded decisions, and are collected by id in §9.2.
 
@@ -24,13 +26,14 @@ The v1 milestone is the issue-driven Loop: an Issue enters, an agent triages it,
 
 The Owner is the audience: the author of workflows and the authority at Checkpoints. v1 is sized to one Owner on one machine (ADR-0005).
 
-The path to other users is preserved by four seams, not by designing for them now: a tracker adapter boundary (§2.6), a Workflow Artifact that lives in each Managed Project's own repository (§4), a `RuntimeAdapter` that keeps the runtime swappable (§2.4), and a local API that a future TUI or web UI can consume without touching the database (ADR-0005). Packaging, onboarding, and a configuration UI are fog (§9.1); designing them now is out of scope.
+The path to other users is preserved by four seams, not by designing for them now: a tracker adapter boundary (§2.6), a Workflow Artifact that lives in each Managed Project's own repository (§4), a `RuntimeAdapter` that keeps the runtime swappable (§2.4), and the Client Contract that a future TUI or web UI can consume without touching the database (§2.7, ADR-0005, ADR-0010). Packaging, onboarding, and a configuration UI are fog (§9.1); designing them now is out of scope.
 
 ### 1.3 v1 scope
 
 | Capability | v1 shape | Source |
 | --- | --- | --- |
-| Process model | Resident Go daemon + thin CLI over a local JSON API on a Unix socket | ADR-0005 |
+| Process model | Resident Go daemon + thin CLI over the Client Contract on a Unix socket | ADR-0005 |
+| Client Contract | `factory-api/v1`: commands, queries, subscriptions; receipts whose intent is co-committed with its transition; durable and telemetry feeds; CLI is the first client and a fake second client proves the seam | ADR-0005, ADR-0010 |
 | Durable state | One SQLite (WAL) database: append-only transition log, projections, snapshots | ADR-0002, ADR-0005 |
 | Runtime | `RuntimeAdapter` seam; OpenCode as the one real adapter; a test double proves the seam | ADR-0002 |
 | Agent Roster | `.factory/roster.dhall`: project-owned entries, ordered model lists, policy references; Wave entries select by id; compiled into the IR | ADR-0007 |
@@ -58,7 +61,7 @@ Out of scope by decision, not by omission:
 - **Runtime plurality.** One real adapter plus a test double; harness neutrality is a property of the seam, not of the shipping surface (ADR-0002).
 - **Webhooks and public ingress.** Intake polls; webhooks are post-v1 (ADR-0005).
 - **External-server mode.** OpenCode runs as a Factory-managed server per Project VM; attaching to an existing external server is post-v1 (ticket 006).
-- **Owner TUI/web UI.** The CLI is the surface; TUI and web clients arrive on the same API (ADR-0005).
+- **Owner TUI/web UI.** The CLI is the surface; TUI and web clients arrive on the same Client Contract (ADR-0005, ADR-0010).
 - **Project Console, Node View, and Project Assistant.** v1 is CLI only; the post-v1 direction is §7.4.
 - **Clarification conversations.** v1 triage is decision-only. The post-v1 `NeedsInfo` branch and its conversation surfaces are §7.5.
 - **Spend caps and budgets.** Cost is tracked when the adapter reports usage; v1 has no `budget` field and no cap (ADR-0004, ADR-0009).
@@ -78,6 +81,7 @@ v1 is done when, on Factory's own repository as a Managed Project, all of the fo
 5. Each blocked egress attempt that needed a decision has an Egress Request outcome recorded in Factory's local database.
 6. The Dhall conformance gate is green in CI, and the Default Workflow Artifact at `defaults/` compiles to its committed golden IR, `defaults/fixtures/golden.ir.json`.
 7. A Workflow Artifact change lands only through a PR against the Managed Project's copy.
+8. The CLI and a fake second client — not sharing the CLI's code — complete the same four client flows over the Client Contract, and a command retried across a daemon restart applies once (ADR-0010, [`API.md` §10](API.md#10-clients-the-cli-and-the-fake-second-client)).
 
 ---
 
@@ -89,7 +93,7 @@ v1 is done when, on Factory's own repository as a Managed Project, all of the fo
 Owner
   │  CLI (thin client, no DB access)
   ▼
-Unix socket ── typed JSON API ──▶ Factory daemon (Go, systemd user unit)
+Unix socket ── Client Contract ──▶ Factory daemon (Go, systemd user unit)
                                    │  SQLite (WAL)
                                    │    append-only transitions · projections · snapshots
                                    │
@@ -106,13 +110,15 @@ Unix socket ── typed JSON API ──▶ Factory daemon (Go, systemd user uni
 
 Two GitHub paths exist by design: the daemon host holds the tracker/PR/merge identity, and the Project VM holds a project-scoped token for direct reads, comments, and pushes (ADR-0004, ticket 009). Merge is host-side only.
 
+The socket carries the **Client Contract** (`factory-api/v1`, §2.7 and [`API.md`](API.md)): the CLI is one client of it, not its definition, and a fake second client proves that a surface which does not exist yet can be built on it.
+
 ### 2.2 The daemon
 
 One long-running Go process on the daemon host, installed as a **systemd user unit** (ADR-0005). It owns the queue, scheduling, Project VM lifecycle, Gate evaluation, Checkpoint delivery, tracker polling, PR and merge execution, egress decisions, and the audit log. It is the only writer to the database.
 
 The daemon's responsibilities are deliberately narrow in one direction: it decides *which work is eligible, who owns it, when it runs, what Gates it must pass, and how outcomes are recorded*. It never decides *how* an agent solves its Task (ticket 002).
 
-The CLI is a client. Commands are idempotent and carry persisted receipts; even locally the client uses a scoped Owner session; no client opens the database (ADR-0005). Ticket 010 names `factory inbox`, `factory approve`, and `factory egress allow`; ADR-0005 fixes the architecture, and §7.3 lists the surface this spec expects.
+The CLI is a client. Every client speaks the **Client Contract** (`factory-api/v1`, §2.7): commands are idempotent and carry persisted receipts; even locally the client uses a scoped Owner session; no client opens the database (ADR-0005, ADR-0010). Ticket 010 names `factory inbox`, `factory approve`, and `factory egress allow`; ADR-0005 fixes the architecture, ADR-0010 the contract, and §7.3 maps the surface this spec expects onto its operations.
 
 ### 2.3 Durable state
 
@@ -123,6 +129,9 @@ One SQLite database in WAL mode, daemon-only writer, project-scoped rows (ADR-00
 | Transition log | Audit truth: every command, state change, Gate verdict, Checkpoint decision, tracker/PR effect, and reconciliation | Append-only; monotonic sequence per database; actor, time, cause, and evidence on every row; long retention (map note #15) |
 | Projections | Current state per Managed Project, Task, Run, Stage, Gate | Derived from the log; safe to rebuild; never authoritative over the log |
 | Snapshots | Bounded replay | Taken at a log sequence; a snapshot plus its suffix reproduces state |
+| Receipts | Command idempotency: key, operation, request digest, principal and client identity, recorded response, and the transition it produced | One row per `(operation, idempotency key)`, written twice: inserted in the same transaction as the intent transition, then updated with the effect's outcome in that effect's transaction. The key, digest, and recorded response never change; retained with the log and backed up with the database (§2.7, ADR-0010) |
+
+Subscriptions are served from the log, not from a store of their own: a durable subscriber's cursor **is** a log sequence, so reconnect resumes exactly, and a cursor below the earliest retained sequence is answered with a resync rather than a silently short stream ([`API.md` §7](API.md#7-the-two-feeds)).
 
 The write discipline follows the effect-runner shape (ticket 002): **commit a valid transition and its effect intent first; perform the external effect outside that decision; record the result as a new transition.** External effects are reconciled before retry — read provider state, then act (§3.12).
 
@@ -221,6 +230,27 @@ Rules: provider IDs stay opaque; provider-specific fields and events are preserv
 - Merge: not a tracker operation, and not an agent operation (§3.9).
 
 There are two principals throughout: the provider credential and the harness agent principal. The harness gates every mutation even when the provider credential could perform it (ticket 003).
+
+### 2.7 Client Contract
+
+One contract, `factory-api/v1`, specified in [`API.md`](API.md) and decided by ADR-0010. Every client — the v1 CLI, and later the Project Console, Node View, Project Assistant, and any remote worker — speaks it and nothing else. It is host-agnostic by construction, so remote/worker mode is an extraction on the same surface, not a rewrite (ADR-0005).
+
+| Part | Shape |
+| --- | --- |
+| Transport | HTTP/1.1 and JSON, one `POST /v1/rpc` endpoint on a Unix socket; one JSON object per call, newline-delimited JSON frames for a stream. Loopback TCP later |
+| Kinds | **Commands** (writes; idempotency key required; a persisted receipt), **queries** (projection reads returning the log sequence they read at), **subscriptions** (feeds, resumed by cursor) |
+| Receipts | A database row inserted in the same transaction as the intent transition it witnesses, then updated with the effect's outcome (§2.3); one application per `(operation, key)`; a retry returns the recorded response |
+| Feeds | **Durable**: the transition log, gapless, replayable after a snapshot, a lagging subscriber disconnected; **live telemetry**: the activity log, explicitly lossy, reporting `gap` (unobserved) and `drop` (fell behind). One mixed feed is rejected — it would either make telemetry look authoritative or state inherit its loss |
+| Decisions | A decision carries the refs it was decided against; a moved target is `stale_target` with the current refs, never a silent approval. This generalizes §3.8's head-bound merge rule to every Owner decision |
+| Auth | A per-start bearer token file at `0600`, a Linux peer-uid check, and declared operation scopes whose v1 grants are broad (ADR-0005) |
+| Versioning | One major per daemon, additive inside it, with a capability descriptor (`meta.capabilities`) a client checks at startup; unknown major refuses rather than half-works |
+| Boundary | Targets are refs and artifact content travels in the request: no operation takes a host path, no operation writes Workflow state, none carries a secret value |
+
+**v1 operations.** The set and each operation's name, kind, scope, and projections are [`API.md` §8.2](API.md#82-the-v1-operation-set) — fourteen today, two of them the transport's own, and additive inside the major, so the table is the list rather than the count. Every query reads a named projection; the durable subscription streams the log's own records by design, and none reaches a table. §7.3 maps the CLI onto them.
+
+**Post-v1 reservations.** §7.4–7.5's surfaces are named as reserved operation ids now — Conversation's five verbs, the Node View query, the Project Assistant's three, and the waiting-agent message — and implemented by a follow-up spec change. A reserved id binds a name and a kind, never a shape: those depend on the observability-schema and conversation-access fog (§9.1).
+
+**The seam test.** A fake second client proves the contract the way the fake `RuntimeAdapter` proves §2.4: a `curl`/`jq` script proves it is usable without our code, and a Go client in its own package proves the typed contract and the feeds. Its acceptance flows are open the inbox, decide (with an idempotent retry), follow a run (both feeds), and reconnect across a daemon restart.
 
 ---
 
@@ -741,27 +771,33 @@ Factory's own repository is the first Managed Project ([`CONTEXT.md`](../../CONT
 
 ### 7.3 Operating surfaces
 
-Ticket 010 names `factory inbox`, `factory approve …`, and `factory egress allow …`; ADR-0005 fixes the architecture. The spec expects at least the following surface; the verb and command names are **⟨default D9⟩**:
+Ticket 010 names `factory inbox`, `factory approve …`, and `factory egress allow …`; ADR-0005 fixes the architecture and ADR-0010 the contract. Each surface is a **client** of `factory-api/v1` (§2.7, [`API.md`](API.md)), each verb from at least one operation; the verb and command names are **⟨default D9⟩**:
 
-| Surface | Purpose |
-| --- | --- |
-| `factory inbox` | Checkpoints, Blocked Tasks, Egress Requests |
-| `factory approve <checkpoint>` | Record a Checkpoint decision, with edits or reason |
-| `factory egress allow` / `factory egress deny` | Decide an Egress Request; both outcomes recorded |
-| `factory init` | Validate the configured harness, select a primary model per default seat and build/test commands, render `defaults/` into `.factory/`, and open the init PR (interactive or flags) |
-| `factory models` | List the adapter's Model Catalog and current availability |
-| `factory status` | Task/Run state, Gate reports, metrics |
-| `factory workflow validate` | Compile and validate the artifact before a PR |
+| CLI verb | Contract operation | Purpose |
+| --- | --- | --- |
+| `factory inbox` | `inbox.query` | Checkpoints, Blocked Tasks, Egress Requests |
+| `factory approve <checkpoint>` | `checkpoint.decide` | Record a Checkpoint decision, with edits or reason |
+| `factory egress allow` / `factory egress deny` | `egress.decide` | Decide an Egress Request; both outcomes recorded |
+| `factory init` | `project.init` (with `project.register`, `model.catalog`) | Validate the configured harness, select a primary model per default seat and build/test commands, render `defaults/` into `.factory/`, and open the init PR (interactive or flags) |
+| `factory projects` | `project.query` | Registered Managed Projects and their state |
+| `factory models` | `model.catalog` | List the adapter's Model Catalog and current availability |
+| `factory status` | `status.query` | Task/Run state, Gate reports, metrics |
+| `factory timeline` | `timeline.query` | The Owner timeline for a Task or Run, filtered (§6.9) |
+| `factory task abandon` | `task.abandon` | Abandon a Task with a reason and an Issue disposition (§3.11) |
+| `factory task resume` | `task.resume` | Resume a Blocked Task (§3.11) |
+| `factory workflow validate` | `workflow.validate` | Compile and validate the artifact from a working tree before a PR |
 
-All are clients of the same API; none reads the database.
+Four verbs are new here because the spec already requires their action and the original surface list predates it: abandonment and resume are Owner actions (§3.11), the timeline is a v1 observability surface (§6.9), and `factory projects` exists because a client cannot call a project-scoped operation without first listing projects. The two transport operations, `meta.capabilities` and `feed.subscribe`, have no verb of their own: every client calls the first at startup, and `--follow` wraps the second.
+
+All are clients of the same contract; none reads the database, and none holds a capability the contract does not expose.
 
 ### 7.4 Post-v1: Project Console and Project Assistant
 
-v1 ships the CLI only. Three post-v1 Factory clients consume the same API and do not change the control plane: the **Project Console** (a per-project browser client for Tasks, Runs, Gate reports, and metrics), the **Node View**, and the **Project Assistant**. They are scoped per Managed Project first; a Factory-wide overview is later.
+v1 ships the CLI only. Three post-v1 Factory clients consume the same Client Contract (§2.7, [`API.md`](API.md)) and do not change the control plane: the **Project Console** (a per-project browser client for Tasks, Runs, Gate reports, and metrics), the **Node View**, and the **Project Assistant**. They are scoped per Managed Project first; a Factory-wide overview is later. Their operation ids are reserved now and implemented by a follow-up spec change; a reserved id fixes a name and a kind, not a shape.
 
-- **Node View.** One node at a time — any element the Workflow defines: a Stage, Gate, Checkpoint, action, or agent entry. It groups the node's Runs, model attempts, activity events, artifacts, Gate reports, and transcript references, and can follow the Run's normalized event stream live. The node path is stable in the IR (v1); the run/event path columns and the view itself are post-v1. A rich view depends on the observability schema fog (§9.1).
+- **Node View.** One node at a time — any element the Workflow defines: a Stage, Gate, Checkpoint, action, or agent entry. It groups the node's Runs, model attempts, activity events, artifacts, Gate reports, and transcript references, and can follow the Run's normalized event stream live. The node path is stable in the IR (v1); the run/event path columns and the view itself are post-v1. A rich view depends on the observability schema fog (§9.1). Its query is reserved as `node.view` and deliberately left unspecified ([`API.md` §9](API.md#9-reserved-post-v1-resources)).
 - **Project Assistant.** A per-project client, not a Workflow Stage and not a Roster Entry. It reads project state and a node's work; it may create an Issue (recorded, with the intake label), propose a `.factory/` change as a PR, and send a message to a waiting Run — each with Owner confirmation. Its answer to a question is a transient artifact the Owner can view and discard; there is no separate report capability. It never merges, transitions the tracker, advances Workflow state, holds the Project VM's credentials, or records a Checkpoint decision on the Owner's behalf.
-- **Waiting-agent conversation.** When an agent waits for a human, its Run enters `waiting_for_human`; the Task may be Blocked or still in its Stage. The Owner's message is a recorded command; the adapter steers or resumes the session, and the conversation lands in the transcript and activity log. A conversation can unblock or inform the agent, but it cannot advance the Workflow; a Checkpoint decision remains a separate harness record. If the session is gone, the conversation is not possible: the Task is Blocked with evidence and resumes per policy with a fresh session and handoff summary. A waiting-agent exchange and a triage clarification are both Conversations (§7.5), the same record the post-v1 API exposes as a resource.
+- **Waiting-agent conversation.** When an agent waits for a human, its Run enters `waiting_for_human`; the Task may be Blocked or still in its Stage. The Owner's message is a recorded command — reserved as `run.message` — and the adapter steers or resumes the session, and the conversation lands in the transcript and activity log. A conversation can unblock or inform the agent, but it cannot advance the Workflow; a Checkpoint decision remains a separate harness record. If the session is gone, the conversation is not possible: the Task is Blocked with evidence and resumes per policy with a fresh session and handoff summary. A waiting-agent exchange and a triage clarification are both Conversations (§7.5), the same record the post-v1 client contract exposes as a resource.
 
 ### 7.5 Post-v1: Clarification conversations and handoff
 
@@ -787,7 +823,7 @@ Post-v1 adds an alternative triage outcome — `NeedsInfo` — and a richer surf
 
 They are compatible but distinct; choosing either is a future ADR.
 
-**Forward-looking API note.** The post-v1 API exposes Conversation as a resource — query, open/handoff, message, close, subscribe — for the Project Assistant, the Node View (§7.4), and a T3 surface. It reads and writes Conversation records and streams messages; it does not advance Workflow state, which still comes only from a committed transition. The full contract belongs to the future client API design, not this spec.
+**Forward-looking client-contract note.** The post-v1 Client Contract exposes Conversation as a resource — query, open/handoff, message, close, subscribe — for the Project Assistant, the Node View (§7.4), and a T3 surface. Its five operation ids are reserved in [`API.md` §9](API.md#9-reserved-post-v1-resources); the record's fields and the three binding rules are above, and the response shapes belong to a follow-up spec change. It reads and writes Conversation records and streams messages; it does not advance Workflow state, which still comes only from a committed transition.
 
 ---
 
@@ -837,6 +873,7 @@ The gate failing stops the build. It does not trigger a fallback frontend: the O
 | IR | its own major version | engine refuses unknown versions |
 | Dhall standard | the subset `dhall-golang` supports | conformance gate proves the schema, not the standard |
 | Event envelope | `schema_version` 1 | additive changes bump the version |
+| Client Contract | `factory-api/v1` | additive inside the major; one major per daemon and an unknown one is refused, never half-served; the capability descriptor is checked at client startup (ADR-0010) |
 
 The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later, and the contract run — not the version string — decides whether a given build is usable (ticket 017).
 
@@ -874,7 +911,7 @@ The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later
 Dependency-ordered, each step ending in a verifiable state:
 
 1. Dhall conformance spike + IR validator + Default Workflow Artifact in `defaults/` (workflow, roster, envelope, bindings, schema, golden IR) (the earliest failure is the cheapest).
-2. Transition log, projections, snapshots, API skeleton, CLI client.
+2. Transition log, projections, snapshots, and receipts, with the Client Contract's skeleton — commands, queries, one durable feed, one telemetry feed — the CLI as its first client, and the fake second client running the four seam flows ([`API.md` §10](API.md#10-clients-the-cli-and-the-fake-second-client)) against it.
 3. Fake `RuntimeAdapter` runs the Loop's state machine end to end with no real agent, including model fallback and exhaustion.
 4. devvm lifecycle + Envelope compilation + secret bindings.
 5. OpenCode adapter inside the Project VM; Model Catalog; contract tests.
@@ -888,18 +925,19 @@ Dependency-ordered, each step ending in a verifiable state:
 
 ### 9.1 Fog
 
-Four questions remain unspecified in the record. This spec does not answer them.
+Five questions remain unspecified in the record. This spec does not answer them.
 
 1. **Observability schema detail.** The envelope's field names are decided (ticket 004, §6.2); its allowed-value enums, indexing, retention windows, and the queries mining runs over are not. Until they are, the log is a schema without an operational contract: implementers will otherwise invent value names and indexes that mining then depends on. Related detail: whether workflow facts (Gate verdicts, Checkpoints, effects) surface as additional activity kinds or stay transition-log-only.
 2. **Path-to-other-users surface.** Packaging, onboarding, the configuration surface a second Owner would need, multi-user auth, and how a second Owner's projects are isolated. The map defers design until the Owner's needs are fully specified; the four seams in §1.2 are what keeps the door open.
 3. **Project Assistant capability set.** Beyond the boundaries §7.4 records — never merge, never transition the tracker, never advance Workflow state, no Project VM credentials, no Checkpoint decision on the Owner's behalf — the assistant's tool surface, confirmation rules, and transient-artifact behavior are not specified.
 4. **Clarification conversation access and shape.** Guest or multi-user access to a Conversation, whether T3 is a surface or a `RuntimeAdapter` (§7.5), retention of conversation transcripts, and whether clarification needs a dedicated agent beyond the triager are unspecified.
+5. **A non-CLI client's transport and credential.** The Client Contract is settled for one Owner on one machine (§2.7, [`API.md`](API.md)), and it is host-agnostic by construction, but the step after the socket is not: loopback TCP for a same-host browser client, how that client receives a credential it cannot read from a `0600` file, `Origin` and CSRF-shaped defences, and narrower operation grants for a read-only surface. Until a second surface ships, this is its question to raise and not this spec's to guess.
 
 Everything else is deferred by decision; §1.4 is the authoritative list, and none of it is fog. Per-Run VMs are not a deferral: they remain an escalation option, unused by v1 (ticket 017).
 
 ### 9.2 Spec defaults introduced here
 
-Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable key, the section reference is convenience:
+Every **⟨default Dn⟩** in this spec or its companion [`API.md`](API.md) is listed here; the D-id is the stable key, the section reference is convenience:
 
 | # | Default | Where |
 | --- | --- | --- |
@@ -915,12 +953,14 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D10 | Init blocks and opens no PR when no provider is configured or live validation fails | §7.1 |
 | D11 | Build/test commands default to `make build` / `make test` | §7.1 |
 | D12 | Content digest: SHA-256 over the default's source set, sorted by path, LF-normalized | §4.6 |
+| D13 | Runtime paths: socket and session token under `$XDG_RUNTIME_DIR/factory/`, mode `0600`, falling back to `~/.local/state/factory/` | [`API.md` §3](API.md#3-transport-and-session) |
+| D14 | Initial client limits and timings: page size 200, response 1 MiB, durable/telemetry subscriber buffers 256/4096, 30 s request timeout, 15 s heartbeat; inbox ordering oldest first. Reported by `meta.capabilities`, never hard-coded by a client | [`API.md` §3.5, §8.3](API.md#35-capability-discovery) |
 
 ---
 
 ## 10. Reconciliations
 
-The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership; I12 records the containment contract/local-config split and the `budget` removal. I7's amendment replaced ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009; I12 supersedes that persistence and I11's provider-endpoints-in-bindings part. No other decision was reversed.
+The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership; I12 records the containment contract/local-config split and the `budget` removal; I13 records the client surface ADR-0005 named but did not specify. I7's amendment replaced ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009; I12 supersedes that persistence and I11's provider-endpoints-in-bindings part. I13 specifies an outline rather than reversing one, so no other decision was reversed.
 
 | # | Was | Resolution | Artifact changed |
 | --- | --- | --- | --- |
@@ -936,6 +976,7 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
 | I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause. Superseded in part by I12: provider endpoints are local config, not bindings | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
 | I12 | I7 persisted egress approvals as artifact PRs; the Envelope carried the allowlist, secret scopes, and `budget` | The artifact carries the containment contract (tier, preset, `extra_allow`, secret names); local devvm config carries the full allowlist, provider endpoints, and secret scopes; Egress decisions are recorded in SQLite; `budget` is removed (ADR-0009) | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`ADR-0009`](../adr/0009-containment-contract-local-config.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
+| I13 | ADR-0005 and ticket 010 named the client surface in one line each — "typed local JSON API", "commands, receipts, snapshots + subscriptions" — with no contract behind it | The Client Contract (`factory-api/v1`) specifies transport, envelopes, fourteen v1 operations, receipts co-committed with their intent transitions, the two feeds with their guarantees, an error taxonomy, stale-target rules, versioning and capability discovery, and ten reserved post-v1 ids (ADR-0010) | [`API.md`](API.md), [`ADR-0005`](../adr/0005-resident-daemon-thin-clients.md), [`ADR-0010`](../adr/0010-client-contract.md), [`CONTEXT.md`](../../CONTEXT.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a harness action between Review and Merge, with Gate evaluation inside Stages (§3.1).
 
@@ -956,6 +997,8 @@ I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) an
 | [`docs/adr/0007`](../adr/0007-agent-roster-in-workflow-artifact.md) | Agent Roster in `.factory/`, selection by id, ordered model lists, typed failure to the Stage |
 | [`docs/adr/0008`](../adr/0008-default-artifact-deliverable.md) | Default artifact in `defaults/`; bindings; golden IR; content digest; migrations |
 | [`docs/adr/0009`](../adr/0009-containment-contract-local-config.md) | Containment contract vs local devvm config; local Egress record; budget removed |
+| [`docs/adr/0010`](../adr/0010-client-contract.md) | The Client Contract: commands/queries/subscriptions, receipts, two feeds, versioning, auth |
+| [`docs/spec/API.md`](API.md) | The client boundary: envelopes, operations, receipts, feeds, errors, reserved ids, seam test |
 | [`closed/001`](../wayfinding/closed/001-research-harness-language.md) | Go core recommendation; workflow-authoring question deferred (superseded in part) |
 | [`closed/002`](../wayfinding/closed/002-research-build-vs-opencode-plugins.md) | Control-plane/runtime boundary; effect-runner discipline |
 | [`closed/003`](../wayfinding/closed/003-research-tracker-adapters-and-permissions.md) | Tracker adapter contract; harness-gated mutations |
@@ -965,7 +1008,7 @@ I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) an
 | [`closed/007`](../wayfinding/closed/007-decide-harness-language.md) | Go core decision; workflow-type constraint |
 | [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md) | Loop stages; default Wave; failure policies; metrics; init |
 | [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md) | Envelope fields; tracker authority split; PR/merge ownership |
-| [`closed/010`](../wayfinding/closed/010-decide-daemon-or-cli.md) | Process model; state; API; restart; VM lifecycle |
+| [`closed/010`](../wayfinding/closed/010-decide-daemon-or-cli.md) | Process model; state; client surface; restart; VM lifecycle |
 | [`closed/011`](../wayfinding/closed/011-research-typed-functional-workflow-language.md) | Typed graph; CEL; Dhall risk; IR independence |
 | [`closed/012`](../wayfinding/closed/012-research-harness2-recursive-harnessing.md) | Harness vocabulary; improvement-library contract |
 | [`closed/013`](../wayfinding/closed/013-research-swamp-club-behavior-centric.md) | Typed DAG corroboration; grant vocabulary; patterns not substrate |
