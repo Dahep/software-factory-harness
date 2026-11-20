@@ -9,7 +9,7 @@ status: resolved
 
 The spec's first milestone is the issue-driven loop: issues → triage → agent team implements approved ones → review → merge, on one project, from a coordinating process. What exactly is in the loop for v1? Open questions to settle with the owner: which steps are agents vs the owner (triage suggestions — owner approves?), how many agents in the implementer/reviewer wave, what "merge" means (PR via review gate?), what happens when the loop stalls, and which parts land in the spec's first milestone vs the fog. Grilling + domain-modeling; the loop's vocabulary (Managed Project, Task, Triage states, Loop, Gate) goes into a CONTEXT.md as it crystallises.
 
-Context pointer (2026-11-03): [Study Zed's DeltaDB](closed/014-research-deltadb-operation-level-vcs.md) adds trade evidence for merge-gate design — review as subthread + isolated worktree + change-guide skill, verdicts posted back, "Land" as a project-defined skill; and the sharp rule the owner must decide against: **the gate lives in harness-enforced rules, never in an LLM-interpreted skill**. Read its Resolution before grilling this ticket.
+Context pointer (2026-11-03): [Study Zed's DeltaDB](014-research-deltadb-operation-level-vcs.md) adds trade evidence for merge-gate design — review as subthread + isolated worktree + change-guide skill, verdicts posted back, "Land" as a project-defined skill; and the sharp rule the owner must decide against: **the gate lives in harness-enforced rules, never in an LLM-interpreted skill**. Read its Resolution before grilling this ticket.
 
 ## Resolution
 
@@ -27,3 +27,5 @@ Context pointer (2026-11-03): [Study Zed's DeltaDB](closed/014-research-deltadb-
 8. **In v1 vs fog.** In: the Loop above, GitHub Issues as the only tracker, one Managed Project plus Factory-as-subproject, the default Workflow, Project Init. Fog/post-v1: post-merge monitoring and fix cycles, sub-Issue decomposition in Triage, workflow authoring tooling (now ticket 016), other trackers, multi-project fleets, runtime plurality, the sandboxed composition capability.
 
 Glossary terms crystallised into `CONTEXT.md`: Gate (+ Failure Policy), TriageDecision, Workflow Artifact, Project Init, Agent Confusion.
+
+**Amendment (2026-11-19).** Item 6's "runtime configuration" is the project-owned Agent Roster in `.factory/roster.dhall` (ADR-0007), compiled into the IR; the init PR renders the roster's primary models and writes secret names, never values.
