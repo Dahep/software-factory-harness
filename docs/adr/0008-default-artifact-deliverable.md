@@ -1,6 +1,6 @@
 # The default Workflow Artifact is a versioned deliverable
 
-Factory ships one **Default Workflow Artifact** in `defaults/`: the typed workflow, Agent Roster, envelope, schema, a bindings example, and a golden IR compiled from fixture bindings. Project Init renders it into a Managed Project's `.factory/` and writes the project's `bindings.dhall` — primary models per seat, build/test commands, provider names and endpoints, and provenance (`irVersion` + content digest). The IR major is the shape version; the content digest is the exact default. Content changes update `defaults/` in place; a shape change bumps the IR major and is adopted by a migration PR against each project. The default is a seed, not a dependency: no inheritance, no propagation, no automatic upgrades. The golden IR is a fixture compile for CI drift checks, never a production artifact.
+Factory ships one **Default Workflow Artifact** in `defaults/`: the typed workflow, Agent Roster, envelope, schema, a bindings example, and a golden IR compiled from fixture bindings. Project Init renders it into a Managed Project's `.factory/` and writes the project's `bindings.dhall` — primary models per seat, build/test commands, provider and secret names, and provenance (`irVersion` + content digest). The IR major is the shape version; the content digest is the exact default. Content changes update `defaults/` in place; a shape change bumps the IR major and is adopted by a migration PR against each project. The default is a seed, not a dependency: no inheritance, no propagation, no automatic upgrades. The golden IR is a fixture compile for CI drift checks, never a production artifact.
 
 ## Considered Options
 
@@ -20,6 +20,6 @@ Factory ships one **Default Workflow Artifact** in `defaults/`: the typed workfl
 - Every Workflow element gets a stable node id in the IR and the golden IR; grouping Runs and events under a node is the post-v1 Node View.
 - A shape migration is a PR against the project's copy; a content change never propagates.
 - Project Init writes `bindings.dhall`; it does not copy an old default or upgrade one silently.
-- ADR-0007 recorded Project Init writing provider secret names and endpoints into `envelope.dhall`; that clause is superseded: init copies the default envelope and writes provider names and endpoints into `bindings.dhall`, while the Envelope still declares the grants (the spec's §4.4).
+- ADR-0007 recorded Project Init writing provider secret names and endpoints into `envelope.dhall`; that clause is superseded: init copies the default envelope, writes provider and secret names into `bindings.dhall`, and applies provider endpoints to local devvm config, while the Envelope declares the contract (the spec's §4.4, ADR-0009).
 
-Status: accepted 2026-11-20 (architecture review, candidate 2: default artifact; review record: PR #2).
+Status: accepted 2026-11-20 (architecture review, candidate 2: default artifact; review record: PR #2). Amended 2026-11-20: provider endpoints are local devvm config, not `bindings.dhall` (ADR-0009).

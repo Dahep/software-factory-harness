@@ -36,6 +36,7 @@ The path to other users is preserved by four seams, not by designing for them no
 | Agent Roster | `.factory/roster.dhall`: project-owned entries, ordered model lists, policy references; Wave entries select by id; compiled into the IR | ADR-0007 |
 | Default artifact | `defaults/`: typed workflow, roster, envelope, schema, bindings; fixture golden IR in CI; Project Init renders it into a project copy | ADR-0008 |
 | Containment | One Project VM (devvm) per Managed Project; Project Envelope compiled from the artifact | ADR-0004, ticket 017 |
+| Egress | Local devvm allowlist and secret scopes; Egress decisions recorded in SQLite; no artifact PR | ADR-0009 |
 | Tracker | GitHub Issues via `gh`; adapter interface designed for others | ticket 003, ticket 008 |
 | Loop | intake → triage → implement → gates → review → PR → merge, Owner at two Checkpoints | ADR-0003 |
 | Default Wave | one implementer, two reviewers (spec-fidelity + adversarial), as Workflow data | ticket 008 |
@@ -59,7 +60,7 @@ Out of scope by decision, not by omission:
 - **External-server mode.** OpenCode runs as a Factory-managed server per Project VM; attaching to an existing external server is post-v1 (ticket 006).
 - **Owner TUI/web UI.** The CLI is the surface; TUI and web clients arrive on the same API (ADR-0005).
 - **Project Console, Node View, and Project Assistant.** v1 is CLI only; the post-v1 direction is §7.4.
-- **Spend caps.** Spend is measured per Task, not capped (ADR-0004).
+- **Spend caps and budgets.** Cost is tracked when the adapter reports usage; v1 has no `budget` field and no cap (ADR-0004, ADR-0009).
 - **Post-merge monitoring and fix cycles**, and **sub-Issue decomposition in Triage** (ticket 008).
 - **Code-mode / sandboxed composition** as a Workflow layer. The pattern is reserved as a future adapter capability; an LLM-authored script is never the Workflow and never a Gate (ADR-0002, ticket 015).
 - **Remote/worker mode and multi-machine fleets.** Local daemon only (ADR-0005).
@@ -73,7 +74,7 @@ v1 is done when, on Factory's own repository as a Managed Project, all of the fo
 2. Every Gate verdict is recorded with its inputs; no agent judgment, plugin, or skill file decides advancement.
 3. A daemon restart mid-Task either resumes from the last transition or parks the Task Blocked with evidence; no Task is silently re-dispatched (ADR-0005).
 4. Every Run carries the default metric set, including the six Agent Confusion proxies.
-5. Each blocked egress attempt that needed a decision has a recorded Egress Request outcome.
+5. Each blocked egress attempt that needed a decision has an Egress Request outcome recorded in Factory's local database.
 6. The Dhall conformance gate is green in CI, and the Default Workflow Artifact at `defaults/` compiles to its committed golden IR, `defaults/fixtures/golden.ir.json`.
 7. A Workflow Artifact change lands only through a PR against the Managed Project's copy.
 
@@ -134,6 +135,7 @@ Log event types the transition log must carry (fields, not DDL):
 | Checkpoint | asks (artifact references), decision, edits or reason, actor, time |
 | Run | adapter instance, Task input digest, Outcome, model attempts (requested, resolved, outcome, reason), usage, transcript reference, completeness |
 | Effect | tracker/PR/merge/VM action, idempotency key, result, provider reference |
+| Egress Request | host, method, path, reason, decision (allow/deny), applied local rule, actor, time, local-config reference |
 
 Pre-Task transitions (intake, triage, the triage Checkpoint) carry the Issue and the triage Run; `Task` is absent until approval creates it.
 
@@ -145,7 +147,7 @@ The seam is T3-shaped (ticket 006, ADR-0002). Four parts:
 
 | Part | Contract |
 | --- | --- |
-| Task in | typed: prompt, workspace reference, resolved roster entry (id, instructions, ordered model list, policy reference), capability-profile ref (the Project Envelope in v1), budget |
+| Task in | typed: prompt, workspace reference, resolved roster entry (id, instructions, ordered model list, policy reference), capability-profile ref (the Project Envelope in v1) |
 | Outcome out | typed: status, artifacts, diff reference, transcript reference, usage, and the model attempt trail (requested model, resolved model, outcome, failure reason where an attempt failed); a failed Outcome also carries its typed reason |
 | Events | normalized stream for session / message / tool / permission. Telemetry only — never Workflow state |
 | Capabilities | an explicit descriptor per driver: streaming, steer/interrupt, checkpoints, rollback, sandboxed composition, native option IDs, Model Catalog, failure-reason set |
@@ -165,7 +167,7 @@ The Task's `capability-profile ref` **resolves to the Managed Project's Project 
 
 **OpenCode as the v1 adapter.** Factory starts, version-probes, idles out, and speaks to an OpenCode server over its API; external-server mode is post-v1. One server per Project VM — the instance is the Managed Project's running runtime, configured from its Agent Roster (§4.1, ADR-0007) — with many sessions (one per agent in a Wave). The server runs inside the Project VM; the daemon reaches it through `devvm host` + SSH (ticket 006, ticket 017).
 
-**The Agent Roster** (`.factory/roster.dhall`, ADR-0007) declares the project's Roster Entries: agent identity, role and persona, instructions, ordered model list, tool and permission policy reference, adapter options, declared requirements, and budget. It compiles into the IR, so a Task's pin covers the models and permissions that execute it. Factory validates it against the adapter's Model Catalog at compile time; interactive Project Init validates provider availability live (§7.1). Provider authentication stays harness- and host-side, Factory stores no secret values, and the Envelope names them (§5.5). Correctness never depends on the host's global OpenCode config (ADR-0002, ticket 006).
+**The Agent Roster** (`.factory/roster.dhall`, ADR-0007) declares the project's Roster Entries: agent identity, role and persona, instructions, ordered model list, tool and permission policy reference, adapter options, and declared requirements (secret names, tool classes, modality). It compiles into the IR, so a Task's pin covers the models and permissions that execute it. Factory validates it against the adapter's Model Catalog at compile time; interactive Project Init validates provider availability live (§7.1). Provider authentication stays harness- and host-side, Factory stores no secret values, and the Envelope names them (§5.5). Correctness never depends on the host's global OpenCode config (ADR-0002, ticket 006).
 
 **The minimal Factory plugin** exposes only: report a blocker, attach an artifact, read Gate status, inject Task context, and enforce permission rules. It never advances Workflow state (ticket 002, ticket 006).
 
@@ -356,7 +358,7 @@ Blocked is a Task state with evidence: what failed, which Gate or effect, what w
 | Pre-Task triage failure | Recorded against the Issue; retry within Triage or wait for the Owner; no Task is created |
 | Project VM lost | Task Blocked with evidence; no silent recreation (ADR-0005) |
 | Tracker/PR divergence | Reconcile from provider state; record the correction; block if the two cannot be reconciled safely |
-| Egress block needing a decision | Egress Request to the Owner (§5.6); the Task waits |
+| Egress block needing a decision | Egress Request to the Owner (§5.6); on a decision the rule is applied locally and recorded, and the Task resumes per policy |
 | Secret denial | Recorded with host and reason; the Task blocks or retries per policy; never bypassed |
 
 Abandonment is an Owner decision with a reason; the Issue is left open with a comment or closed, per that decision.
@@ -367,7 +369,7 @@ On start, the daemon loads the latest snapshot, replays the log suffix, and reco
 
 1. **Tracker**: labels, state, and comments for every non-terminal Task; adopt provider truth where Factory's projection is stale.
 2. **PRs**: open/closed/merged state, checks, and head commit for every Task with an open PR (AwaitingMerge or later).
-3. **Project VMs**: presence, tier, and bindings per Managed Project; a Task whose VM state vanished goes Blocked with evidence.
+3. **Project VMs**: presence, tier, and bindings per Managed Project; the local allowlist and secret scopes are reported from devvm and compared with the recorded local rules, not treated as contract drift. A Task whose VM state vanished goes Blocked with evidence.
 4. **In-flight Runs**: a Run whose session is gone is marked failed with evidence; the Task resumes from its last transition only if the Stage can be safely re-entered. A pre-Task triage Run is retried within Triage or waits on the Issue.
 
 No silent re-dispatch. Before retrying any external effect, read the provider state (PR exists? merge already applied? comment posted?) and record what was found. Reconciliation itself is logged as transitions.
@@ -384,8 +386,8 @@ A Managed Project carries its Workflow Artifact as a committed directory, added 
 .factory/
   workflow.dhall   # stages, waves, gates and failure policies, checkpoints, concurrency, measures
   roster.dhall     # Agent Roster: entries, model lists from bindings, policy references, declared requirements
-  bindings.dhall   # init data: models per seat, build/test commands, provider names/endpoints, provenance
-  envelope.dhall   # clone mode, network tier and allowlist, secret names, spend measurement
+  bindings.dhall   # init data: models per seat, build/test commands, provider/secret names, provenance
+  envelope.dhall   # clone mode, network tier and preset, optional extra_allow, secret names
   schema/          # the Dhall types the files import
 ```
 
@@ -432,14 +434,14 @@ Top-level fields the IR must express (names follow the prototype's compiled sket
 | IR version | engine contract version |
 | Workflow identity | name, description, Managed Project reference |
 | Envelope | compiled Project Envelope (§4.4) |
-| Roster | entries: id, role, persona, instructions (content-addressed), ordered model list, tool and permission policy reference (the post-v1 profile ref; the Project Envelope in v1), adapter options, declared requirements, budget; one adapter kind per Managed Project |
+| Roster | entries: id, role, persona, instructions (content-addressed), ordered model list, tool and permission policy reference (the post-v1 profile ref; the Project Envelope in v1), adapter options, declared requirements (secret names, tool classes, modality); one adapter kind per Managed Project |
 | Concurrency | max in-flight Tasks |
 | Checkpoints | id → Stage, the artifacts asked for |
 | Stages | id, entry condition, Wave (agent entries: roster entry id; role/persona metadata), Gates (id, check class + parameters, Failure Policy with bounds), the Stage's Run-failure policy, Checkpoint, action, measures |
 | Node identity | every Stage, Gate, Checkpoint, action, and agent entry has a stable id; its node path is parent + kind + id |
 | Measures | default set reference plus optional per-Stage additions; every measure id is a built-in semantic key (§6.4) |
 
-The roster is part of the IR; a Task pin therefore covers the models, tools, and permissions that execute it (ADR-0007, D3). The default's golden IR asserts the node paths and metric keys; a project's IR is compiled at Task creation and pinned.
+The roster is part of the IR; a Task pin therefore covers the models, tools, and permissions that execute it (ADR-0007, D3). The full network allowlist, provider endpoints, and secret scopes are local devvm config, not IR fields (ADR-0009). The default's golden IR asserts the node paths and metric keys; a project's IR is compiled at Task creation and pinned.
 
 ### 4.4 Project Envelope
 
@@ -449,15 +451,15 @@ The Envelope is the containment declaration Factory compiles into the Project VM
 | --- | --- | --- |
 | `clone` | the VM holds its own copy; the host working tree is never mounted | `devvm --clone` |
 | `network.tier` | `allowlist` | devvm tier |
-| `network.allow` | human-editable hosts; the **developer preset** starts with GitHub, the configured model-provider endpoints, and common package registries | `devvm network allow` rules |
-| `secrets` | secret **names** only (e.g. `github`, `model-provider`) | `devvm secret use` bindings per Project VM |
-| `budget` | spend **measurement** declaration; no cap in v1 | usage recording per Task |
+| `network.preset` | a named adapter/devvm preset; `developer` starts with GitHub, the configured model-provider endpoints, and common package registries | preset expansion at VM create |
+| `network.extra_allow` | optional stable project hosts, version-controlled; empty by default | local allow rules |
+| `secrets` | secret **names** only (e.g. `github`, `model-provider`); scopes are local | `devvm secret use` bindings per Project VM |
 
-Roster entries declare their requirements: secret names and hosts, checked against the Envelope's grants; tool classes and modality, checked against the Model Catalog for every model in the entry's list (ADR-0007). The Envelope grants; it never selects a model.
+Roster entries declare their requirements: secret names, checked against the Envelope's grants; tool classes and modality, checked against the Model Catalog for every model in the entry's list (ADR-0007). Network hosts are runtime egress, not entry requirements (ADR-0009). The Envelope grants; it never selects a model.
 
-The envelope declares clone mode, and v1 enforces `true` (ADR-0004, ticket 009). The developer preset's exact host list is build-time data seeded from the prototype (`github.com`, `api.github.com`, npm, PyPI, Go proxy, crates.io); the Owner may edit it in the artifact. **⟨default D7⟩**
+The envelope declares clone mode, and v1 enforces `true` (ADR-0004, ticket 009). The `developer` preset is a named adapter/devvm set; its exact host list is build-time data seeded from the prototype (`github.com`, `api.github.com`, npm, PyPI, Go proxy, crates.io). **⟨default D7⟩** The Owner may add stable project hosts to `extra_allow` by PR; per-request egress additions stay in local devvm config.
 
-The artifact is the single source of truth: the Project VM is never hand-configured differently (ADR-0004).
+The artifact is the source of truth for the containment contract — clone, tier, preset, `extra_allow`, secret names. It is not the source of truth for the full allowlist or secret scopes: those are local devvm config, owned by the Owner and recorded in Factory's local database (ADR-0009). The VM is never hand-configured differently for the contract fields.
 
 ### 4.5 Secrets by name only
 
@@ -465,7 +467,7 @@ The artifact is committed, so it never contains a secret value. It names secrets
 
 ### 4.6 Copy-on-init and deviation
 
-Project Init renders the Default Workflow Artifact in [`defaults/`](../../defaults/README.md) into the Managed Project's `.factory/` through a PR: the typed workflow, roster, envelope, and schema are copied, and `bindings.dhall` carries the selected primary models, build/test commands, provider names/endpoints, and provenance (`irVersion` + content digest). There is no inheritance, `extends`, or override machinery: a Managed Project that wants a different Wave, an extra Gate, a different model list, or different bindings edits its own copy in a PR. This keeps one authoritative artifact per Managed Project and needs no merge semantics (ADR-0006, ADR-0007, ADR-0008).
+Project Init renders the Default Workflow Artifact in [`defaults/`](../../defaults/README.md) into the Managed Project's `.factory/` through a PR: the typed workflow, roster, envelope, and schema are copied, and `bindings.dhall` carries the selected primary models, build/test commands, provider and secret names, and provenance (`irVersion` + content digest); provider endpoints are applied to local devvm config, not the artifact. There is no inheritance, `extends`, or override machinery: a Managed Project that wants a different Wave, an extra Gate, a different model list, or different bindings edits its own copy in a PR. This keeps one authoritative artifact per Managed Project and needs no merge semantics (ADR-0006, ADR-0007, ADR-0008).
 
 An upstream content change to `defaults/` does not propagate; the digest records what the project started from. A shape change is an IR major bump and a migration PR against the project's copy. Fallback models are added to an entry's ordered list by a roster or bindings PR.
 
@@ -484,7 +486,7 @@ The compiler and IR validator reject:
 - a Checkpoint naming no Stage, or asking for an artifact no Stage produces;
 - a Wave entry naming no Roster Entry, or an entry missing its role or persona;
 - a Roster Entry whose compiled model list is empty, or a model-list member that is not a Model Catalog ID or whose declared tool classes or modality the static descriptor does not support;
-- an entry whose declared secret names or hosts are not granted by the Envelope;
+- an entry whose declared secret names are not granted by the Envelope;
 - an entry whose policy reference does not resolve to the project policy (the Project Envelope in v1; a Capability Profile post-v1);
 - a Workflow element without a unique node id;
 - a measure id that is not a built-in semantic key (§6.4);
@@ -507,10 +509,12 @@ At Project VM creation or reconfiguration, Factory applies the Envelope in one p
 | Step | devvm surface | Failure |
 | --- | --- | --- |
 | Create or adopt the Managed Project's VM (clone mode) | `--clone`, folder identity | refuse to run; Task blocked with evidence |
-| Set the network tier and allowlist | `allowlist` + rules | broken rule fails closed (all denied) until fixed |
+| Set the tier and expand the preset; apply `extra_allow` and the local allowlist | `allowlist` + preset + local rules | broken rule fails closed (all denied) until fixed |
 | Bind each named secret | `devvm secret use NAME` | missing secret value → Task blocked; never a fallback |
-| Apply method/path scopes for custom secrets | `devvm secret set … --method --path` | failure leaves the placeholder; requests fail closed |
-| Record the compiled envelope digest | Factory transition log | drift between artifact and VM blocks new work |
+| Apply local secret scopes and provider endpoints | `devvm secret set … --method --path`; local config | failure leaves the placeholder; requests fail closed |
+| Record the contract digest | Factory transition log | drift in clone/tier/preset/`extra_allow`/secret names blocks new work; local allowlist differences are recorded, not drift |
+
+The full allowlist, provider endpoints, and secret scopes come from local devvm config, not the artifact (ADR-0009). The contract digest covers only the artifact-owned fields.
 
 ### 5.2 Full agency inside the Project VM
 
@@ -527,7 +531,7 @@ Agents get filesystem, tools, installs, and the copied repository. OpenCode runs
 | Network requests | devvm proxy: allowlist, secret injection, logs |
 | Blocked hosts | Egress Request to the Owner |
 
-**Transition enforcement.** The Project VM's GitHub token is fine-grained to the Managed Project's repositories. Its egress policy denies the methods that express issue mutations — `PATCH`/`PUT`/`DELETE` on issue paths, and `POST` on the label and assignee subpaths — while leaving comment creation (`POST …/comments`) and reads; Factory applies label/state/close from the host. The residual is GitHub's GraphQL endpoint, which can express the same mutations and which `gh` needs for some reads: Factory reconciles provider state and records an out-of-band transition as a violation that does not advance the Task. The authority split is a harness rule; prevention at the network boundary is best-effort, detection is not.
+**Transition enforcement.** The Project VM's GitHub token is fine-grained to the Managed Project's repositories. Its egress policy denies the methods that express issue mutations — `PATCH`/`PUT`/`DELETE` on issue paths, and `POST` on the label and assignee subpaths — while leaving comment creation (`POST …/comments`) and reads; Factory applies label/state/close from the host. The residual is GitHub's GraphQL endpoint, which can express the same mutations and which `gh` needs for some reads: Factory reconciles provider state and records an out-of-band transition as a violation that does not advance the Task. The authority split is a harness rule; prevention at the network boundary is best-effort, detection is not. The base deny rules are adapter/tracker-owned and applied locally; the artifact does not carry them (ADR-0009).
 
 Nothing else is an "always-ask" prompt: v1 has no approval beyond the two Checkpoints (ticket 009).
 
@@ -541,14 +545,14 @@ Factory owns PR creation and holds the merge capability; the agent pushes a bran
 
 ### 5.5 Secrets
 
-The model is devvm's: values live on the host, the VM sees placeholders, and a proxy injects the real value only for the bound hosts (ticket 017). Provider authentication is configured in the harness host-side; Factory stores no secret values.
+The model is devvm's: values live on the host, the VM sees placeholders, and a proxy injects the real value only for the bound hosts (ticket 017). Secret scopes and values are local devvm config; the artifact names secrets only. Provider authentication is configured in the harness host-side; Factory stores no secret values.
 
 | Property | Behavior |
 | --- | --- |
 | Storage | OS keychain or devvm's host-side store; no command prints a value |
 | Placeholders | per-VM random suffix; a placeholder copied out of the VM is worthless elsewhere |
 | Binding | per Project VM (`devvm secret use`); a bound secret's hosts join that VM's allowlist on 443 |
-| Scope | host + header/env + optional method/path; up to 16 exact hosts per custom secret; wildcards refused |
+| Scope | host + header/env + optional method/path; up to 16 exact hosts per custom secret; wildcards refused; configured in the local devvm store, not the artifact |
 | Coverage | HTTPS tunnels (TLS re-terminated with a VM-only CA) and plain HTTP forwards; model APIs, `gh`, git over HTTPS, custom-header APIs |
 | Not covered | git over SSH, raw TCP to arbitrary ports, tools that bypass the proxy |
 | Failure | a placeholder in an un-injected shape stays a placeholder and the server rejects it — fail-closed, logged without the value |
@@ -558,13 +562,13 @@ Consequences the spec carries: remotes are HTTPS; a secret name in the artifact 
 
 ### 5.6 Egress Requests
 
-A devvm-blocked host — with method, path, and reason from `devvm network log --json` — becomes an **Egress Request** for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 009). The Owner allows or denies; the decision is recorded with its outcome, and both are measured. A denial is visible, not silent.
+A devvm-blocked host — with method, path, and reason from `devvm network log --json` — becomes an **Egress Request** for the Owner ([`CONTEXT.md`](../../CONTEXT.md), ticket 009). The Owner allows or denies; Factory applies the rule to the local devvm config and records the decision and applied rule in its local SQLite DB. Both outcomes are measured; a denial is visible, not silent.
 
-An approval is persisted as a Workflow Artifact change: Factory proposes a PR against `envelope.dhall`, applies the approved rule to the running Project VM immediately, and records it as provisional until the PR merges; a rejected PR revokes it at the next compile (ADR-0004, ticket 009 amendment). This keeps an unblock from waiting on review without creating a second configuration surface.
+An approval does not persist as a Workflow Artifact change and has no provisional state. The local config is the applied truth; the SQLite record is the audit and recovery source. A stable project host may be added to `extra_allow` by a separate PR, but that is a deliberate policy change, not the record of the request (ADR-0009).
 
-### 5.7 Spend
+### 5.7 Cost
 
-Spend is measured per Task from the Adapter's usage and recorded in the log; there is no hard cap in v1. Runaways are visible in the Owner's metrics, not prevented (ADR-0004). A cap is post-v1 and would compile through the same Envelope.
+Cost is tracked when the Adapter reports usage, as the `run.tokens` and `run.cost` metrics; missing usage is recorded as unavailable, not estimated. There is no `budget` field and no cap in v1. Runaways are visible in the Owner's metrics, not prevented (ADR-0004, ADR-0009).
 
 ### 5.8 Boundary honesty
 
@@ -578,7 +582,7 @@ Spend is measured per Task from the Adapter's usage and recorded in the log; the
 
 ### 5.9 Post-v1 direction
 
-Capability Profiles are narrower Envelopes — network subset, secret subset, Factory-reach subset, budget — compiled through the same path and enforced by the same Project VM boundary; the artifact remains the single source of truth, and profiles never become a second configuration surface (ticket 009, ADR-0004). A profile attaches to a Roster Entry's policy reference; the roster remains the single place that selects models and tools (ADR-0007).
+Capability Profiles are narrower Envelopes — network subset, secret subset, Factory-reach subset — compiled through the same path and enforced by the same Project VM boundary; the artifact remains the source of truth for the contract, and profiles never become a second configuration surface (ticket 009, ADR-0004). A profile attaches to a Roster Entry's policy reference; the roster remains the single place that selects models and tools (ADR-0007). Profiles narrow the contract and the local config; they do not reintroduce a budget (ADR-0009).
 
 ---
 
@@ -635,8 +639,8 @@ Applies to every Run; Stages may add, never subtract (ADR-0006, ticket 008). Eac
 | `gate.verdict` | Gate verdicts | pass / deny / timeout counts and rates per Gate id |
 | `review.findings` | Review findings | count and severity per Wave, per reviewer persona |
 | `run.retries` | Retries | per Stage and per Task |
-| `run.tokens` | Tokens | per Run, per Task, per Roster Entry, per resolved model, per Managed Project |
-| `run.cost` | Cost | per Run, per Task, per Roster Entry, per resolved model, per Managed Project |
+| `run.tokens` | Tokens | per Run, Task, Roster Entry, resolved model, Managed Project; only when the adapter reports usage |
+| `run.cost` | Cost | same dimensions; only when reported; missing usage is unavailable, never estimated |
 | `model.resolution` | Model resolution | fallback attempts and exhausted lists per Run and Roster Entry; provider error classes; fallback rate |
 | `pr.merge_latency` | PR merge latency | PR opened → merge transition |
 | `tool.error_rate` | Tool error rate | failed or denied tool calls per Run, normalized by operation |
@@ -710,9 +714,9 @@ Adopting a repository as a Managed Project is a PR, not a console wizard ([`CONT
 
 1. The Owner registers the repository and its tracker with Factory.
 2. The Owner configures the harness host-side (OpenCode in v1): adds provider authentication and verifies the models Factory may offer. Factory stores no secret values.
-3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, and asks for a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)) and for build/test commands, defaulting to `make build` / `make test` **⟨default D11⟩**. It renders `defaults/` into the project's `.factory/`, writes `bindings.dhall` with the selected models, commands, provider names/endpoints, and provenance (`irVersion` + content digest), and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR. **⟨default D10⟩**
+3. `factory init` — interactive by default, fully flag-driven for automation — validates the configured harness live, and asks for a primary model for each default seat (triager, implementer, reviewer (spec-fidelity), reviewer (adversarial)) and for build/test commands, defaulting to `make build` / `make test` **⟨default D11⟩**. It renders `defaults/` into the project's `.factory/`, writes `bindings.dhall` with the selected models, commands, provider and secret names, and provenance (`irVersion` + content digest), applies provider endpoints to local devvm config, and proposes the init PR. If no provider is configured or live validation fails, init blocks and opens no PR. **⟨default D10⟩**
 4. The Owner reviews and merges the init PR. The repository is now a Managed Project.
-5. Secret **values** are entered in the harness or devvm host-side store under the names the artifact declares; no value enters Factory, the repository, the VM, or a log.
+5. Secret **values** and scopes are entered in the harness or devvm host-side store under the names the artifact declares; no value enters Factory, the repository, the VM, or a log, and the scope stays local.
 6. Branch protection is verified: merges restricted to Factory's identity; the project token cannot merge.
 7. The Project VM is created on first work, with the Envelope compiled.
 
@@ -812,7 +816,7 @@ The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later
 | R3 | devvm is young (0.1.x), CLI-only, breaking changes on main, 17-VM cap | Lifecycle automation and capacity | Pin ≥ 0.1.1; treat `--json` version as the contract; wrap the CLI behind Factory's adapter; one VM per Managed Project keeps the count low (ticket 017) |
 | R4 | Linux has no `.git` protection | VM-written hooks/config could run on the host | `--clone` always; the host repo is never mounted; devvm scans set-id files on stop (ticket 017) |
 | R5 | Secret injection does not cover git-over-SSH; CA expiry; minting gaps | Push fails; requests fail closed; credential grants | HTTPS remotes; CA expiry is an operational check; fine-grained tokens per Managed Project; rotate after distrust (ticket 017) |
-| R6 | Runaway spend; no cap in v1 | Cost, not correctness | Measured per Task; visible in metrics; the allowlist bounds egress; a cap is post-v1 (ADR-0004) |
+| R6 | Runaway spend; no budget or cap in v1 | Cost, not correctness | Cost tracked when the adapter reports usage; visible in metrics; no `budget` field; the allowlist bounds egress; a cap is post-v1 (ADR-0004, ADR-0009) |
 | R7 | Self-hosting bootstrap is circular | Factory cannot build itself without itself | Manual initial build; Subproject one after handover; feedback as Issues (ticket 008) |
 | R8 | Gate integrity: an agent edits the artifact or claims a verdict; evidence outlives its head | Ungated advancement; merging unreviewed content | IR (including the Agent Roster) pinned per Task; Gates read durable facts; head-bound evidence and compare-and-merge (§3.8–3.9); artifact edits are PRs (ticket 014, ADR-0003, ADR-0007) |
 | R9 | One daemon, one Owner, no multi-user auth | Local compromise; no team use | Unix socket with a scoped Owner session; one writer; one credential owner; multi-client auth deferred (ADR-0005) |
@@ -871,7 +875,7 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D4 | Concurrency above 1 gives each Task its own working copy in the VM | §2.5, §3.10 |
 | D5 | Metric thresholds are recorded configuration | §6.4 |
 | D6 | The Owner restarts the daemon after a self-merged change | §7.2 |
-| D7 | Developer preset host list seeded from the prototype | §4.4 |
+| D7 | The `developer` preset is a named adapter/devvm set; its host list is build-time data seeded from the prototype | §4.4 |
 | D8 | Artifact schemas share `.factory/schema/` with the Dhall types | §4.1 |
 | D9 | CLI verb and command names beyond the three ticket-010 names | §7.3 |
 | D10 | Init blocks and opens no PR when no provider is configured or live validation fails | §7.1 |
@@ -882,7 +886,7 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 
 ## 10. Reconciliations
 
-The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership. No other decision was reversed. I7's amendment replaces ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009.
+The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership; I12 records the containment contract/local-config split and the `budget` removal. No other decision was reversed. I7's amendment replaces ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009.
 
 | # | Was | Resolution | Artifact changed |
 | --- | --- | --- | --- |
@@ -891,12 +895,13 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I3 | Ticket 002 recommended the embedded OpenCode SDK | Superseded by ticket 006/ADR-0002 (managed server over its API); a superseded-in-part note now heads 002 | [`closed/002`](../wayfinding/closed/002-research-build-vs-opencode-plugins.md) |
 | I4 | The map destination promised "per-agent capability control" | v1 controls per Managed Project (ADR-0004); per-role profiles are post-v1 | [`map.md`](../wayfinding/map.md) |
 | I5 | Ticket 006's Task-in named a "capability-profile ref" while v1 ships no profiles | The field resolves to the Project Envelope in v1 and is reserved for post-v1 profiles | [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md) |
-| I6 | ADR-0006's `budget` field read like a cap | It is a spend-measurement declaration: measured, not capped (ADR-0004) | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
-| I7 | Ticket 009 had an egress approval adding a host to the allowlist outside the artifact | An approval persists as a PR against `envelope.dhall`; provisional application is recorded until merge | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md) |
+| I6 | ADR-0006's `budget` field read like a cap | It was a spend-measurement declaration; removed by I12 (cost is tracked when reported) | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
+| I7 | Ticket 009 had an egress approval adding a host to the allowlist outside the artifact | Superseded by I12: an approval applies to local devvm config and is recorded with the applied rule in SQLite; an `extra_allow` PR is optional for stable hosts | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md) |
 | I8 | The map's fog still listed the permission model as unspecified | v1's model is decided (ADR-0004); only post-v1 profiles remain open | [`map.md`](../wayfinding/map.md) |
 | I9 | The glossary defined the Workflow Artifact as the Workflow plus runtime configuration; ADR-0006 defines it as the `.factory/` directory | The artifact is `.factory/`; runtime configuration is a separate Factory-managed, versioned artifact per Managed Project (ADR-0002), and the glossary now says so. This split is superseded by I10 | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
-| I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
+| I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause. Superseded in part by I12: provider endpoints are local config, not bindings | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
+| I12 | I7 persisted egress approvals as artifact PRs; the Envelope carried the allowlist, secret scopes, and `budget` | The artifact carries the containment contract (tier, preset, `extra_allow`, secret names); local devvm config carries the full allowlist, provider endpoints, and secret scopes; Egress decisions are recorded in SQLite; `budget` is removed (ADR-0009) | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0009`](../adr/0009-containment-contract-local-config.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a harness action between Review and Merge, with Gate evaluation inside Stages (§3.1).
 
@@ -916,6 +921,7 @@ I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) an
 | [`docs/adr/0006`](../adr/0006-dhall-authoring-factory-directory.md) | `.factory/`, Dhall → IR, secrets by name, copy-on-init, optional measures |
 | [`docs/adr/0007`](../adr/0007-agent-roster-in-workflow-artifact.md) | Agent Roster in `.factory/`, selection by id, ordered model lists, typed failure to the Stage |
 | [`docs/adr/0008`](../adr/0008-default-artifact-deliverable.md) | Default artifact in `defaults/`; bindings; golden IR; content digest; migrations |
+| [`docs/adr/0009`](../adr/0009-containment-contract-local-config.md) | Containment contract vs local devvm config; local Egress record; budget removed |
 | [`closed/001`](../wayfinding/closed/001-research-harness-language.md) | Go core recommendation; workflow-authoring question deferred (superseded in part) |
 | [`closed/002`](../wayfinding/closed/002-research-build-vs-opencode-plugins.md) | Control-plane/runtime boundary; effect-runner discipline |
 | [`closed/003`](../wayfinding/closed/003-research-tracker-adapters-and-permissions.md) | Tracker adapter contract; harness-gated mutations |
