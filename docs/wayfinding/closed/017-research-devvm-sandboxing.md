@@ -103,3 +103,5 @@ Verified against the current docs and source (`internal/secrets/custom.go`, `doc
 - Secrets are project-scoped by construction: binding a secret to the project's VM grants it to every role in that project unless profiles withhold it.
 
 Glossary term: **Project VM** (added to `CONTEXT.md`).
+
+**Superseded in part (2026-11-20, ADR-0009).** Item 2's secret-bind profile is not stored in the Workflow Artifact: the artifact names secrets only, while hosts, header/env, method/path scopes, and values are local devvm config. Item 1's one-VM-per-project decision stands.

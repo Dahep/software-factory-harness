@@ -17,7 +17,7 @@ The devvm instance that backs a Managed Project: the sandbox, network, and secre
 _Avoid_: sandbox, container, environment
 
 **Project Envelope**:
-The containment contract in a Workflow Artifact — clone mode, network tier and named preset, an optional stable `extra_allow` list, and secret names — that Factory compiles into the Project VM. The full allowlist, provider endpoints, and secret scopes are local devvm config, not part of the artifact.
+The containment contract in a Workflow Artifact — clone mode, network tier and named network preset, an optional stable `extra_allow` list, and secret names — that Factory compiles into the Project VM. The full allowlist, provider endpoints, and secret scopes are local devvm config, not part of the artifact.
 _Avoid_: config, settings, policy
 
 **Local devvm config**:

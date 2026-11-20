@@ -18,7 +18,7 @@ Each Managed Project's Workflow Artifact declares the **containment contract**: 
 - Factory's SQLite gains an Egress Request entity and an applied-local-rule projection; both are backed up with the database.
 - `extra_allow` is the only host list in the artifact; it holds stable project hosts and is empty by default.
 - Provider endpoints are written to local config at Project Init; `bindings.dhall` carries provider and secret names and provenance, not hosts.
-- A rebuilt VM is seeded from the preset, `extra_allow`, and the SQLite applied rules.
+- A rebuilt VM is seeded from the preset, `extra_allow`, the local devvm config, and the SQLite applied rules.
 - Capability Profiles remain post-v1 and narrow the contract and the local config; they do not reintroduce a budget.
 
 Status: accepted 2026-11-20 (architecture review, candidate 3: containment contract and local config).

@@ -41,3 +41,5 @@ T3 Code's own docs (`docs/internals/providers.md`, `overview.md`) were studied o
 **Amendment (2026-11-18, with the spec).** The Task-in `capability-profile ref` is the **Project Envelope reference** in v1: ADR-0004 ships no role profiles, so there is nothing narrower to point at. The field stays in the contract for post-v1 Capability Profiles; Factory validates it against the project's compiled envelope.
 
 **Amendment (2026-11-19).** Item 4's Factory-managed project runtime config is superseded by ADR-0007: each Managed Project owns an Agent Roster in `.factory/roster.dhall`, compiled into the IR. Host credentials and provider auth stay host-level, and Factory stores no secret values.
+
+**Amendment (2026-11-20, ADR-0009).** Item 2's Task-in drops `budget`: v1 has no budget field and no cap, and cost is tracked only when the adapter reports usage.

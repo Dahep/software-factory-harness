@@ -421,7 +421,7 @@ Rules:
 - **Finite graphs.** Dhall has no general recursion. Runtime iteration is an explicit `ForEach` node over a prior typed output, with a declared bound and an engine-persisted cursor (ticket 011).
 - **CEL for guards only.** Guards are typed, side-effect-free, terminating expressions evaluated by the engine (ticket 011).
 - **IR is the contract.** The engine executes the IR, not Dhall. The IR is versioned independently of the Dhall standard (ticket 011, ADR-0006).
-- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a runtime configuration beside the artifact. Each entry's ordered list lives in `bindings.dhall` (ADR-0007, ADR-0008); Project Init writes it, the roster entry that consumes it compiles it into the IR, so the list the engine selects from is the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
+- **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a separate roster or model-selection configuration beside the artifact, and the operational local devvm config (ADR-0009) is applied at the VM boundary, not read as workflow configuration. Each entry's ordered list lives in `bindings.dhall` (ADR-0007, ADR-0008); Project Init writes it, the roster entry that consumes it compiles it into the IR, so the list the engine selects from is the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
 - **Default is a seed.** `defaults/` is compiled in CI against fixture bindings; a project compiles its own `.factory/` with its own `bindings.dhall`. The project never reads `defaults/` at runtime.
 - **Fail closed.** An IR version the engine does not know, or an artifact that fails validation, refuses to start a Task; it never runs a best-effort interpretation.
 
@@ -445,13 +445,13 @@ The roster is part of the IR; a Task pin therefore covers the models, tools, and
 
 ### 4.4 Project Envelope
 
-The Envelope is the containment declaration Factory compiles into the Project VM ([`CONTEXT.md`](../../CONTEXT.md), ADR-0004):
+The Envelope is the containment contract Factory compiles into the Project VM ([`CONTEXT.md`](../../CONTEXT.md), ADR-0004):
 
 | Field | v1 meaning | Compiles to |
 | --- | --- | --- |
 | `clone` | the VM holds its own copy; the host working tree is never mounted | `devvm --clone` |
 | `network.tier` | `allowlist` | devvm tier |
-| `network.preset` | a named adapter/devvm preset; `developer` starts with GitHub, the configured model-provider endpoints, and common package registries | preset expansion at VM create |
+| `network.preset` | a named adapter/devvm preset; `developer` starts with GitHub, common package registries, and the model-provider endpoints configured in local devvm config | preset expansion at VM create |
 | `network.extra_allow` | optional stable project hosts, version-controlled; empty by default | local allow rules |
 | `secrets` | secret **names** only (e.g. `github`, `model-provider`); scopes are local | `devvm secret use` bindings per Project VM |
 
@@ -886,7 +886,7 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 
 ## 10. Reconciliations
 
-The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership; I12 records the containment contract/local-config split and the `budget` removal. No other decision was reversed. I7's amendment replaces ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009.
+The spec's first version recorded nine conflicts between the map, the glossary, the tickets, and the ADRs. This table is the reconciliation record — history, not normative text; the body is normative. I10 records a later Owner decision that reverses I9's split; I11 records the default artifact's ownership; I12 records the containment contract/local-config split and the `budget` removal. I7's amendment replaced ticket 009's runtime-only allowlist with artifact persistence, recorded in ADR-0004 and ticket 009; I12 supersedes that persistence and I11's provider-endpoints-in-bindings part. No other decision was reversed.
 
 | # | Was | Resolution | Artifact changed |
 | --- | --- | --- | --- |
@@ -901,11 +901,11 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I9 | The glossary defined the Workflow Artifact as the Workflow plus runtime configuration; ADR-0006 defines it as the `.factory/` directory | The artifact is `.factory/`; runtime configuration is a separate Factory-managed, versioned artifact per Managed Project (ADR-0002), and the glossary now says so. This split is superseded by I10 | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md) |
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
 | I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause. Superseded in part by I12: provider endpoints are local config, not bindings | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
-| I12 | I7 persisted egress approvals as artifact PRs; the Envelope carried the allowlist, secret scopes, and `budget` | The artifact carries the containment contract (tier, preset, `extra_allow`, secret names); local devvm config carries the full allowlist, provider endpoints, and secret scopes; Egress decisions are recorded in SQLite; `budget` is removed (ADR-0009) | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0009`](../adr/0009-containment-contract-local-config.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
+| I12 | I7 persisted egress approvals as artifact PRs; the Envelope carried the allowlist, secret scopes, and `budget` | The artifact carries the containment contract (tier, preset, `extra_allow`, secret names); local devvm config carries the full allowlist, provider endpoints, and secret scopes; Egress decisions are recorded in SQLite; `budget` is removed (ADR-0009) | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`ADR-0009`](../adr/0009-containment-contract-local-config.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a harness action between Review and Merge, with Gate evaluation inside Stages (§3.1).
 
-I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md).
+I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md). I12 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md), [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md), and [`closed/017`](../wayfinding/closed/017-research-devvm-sandboxing.md).
 
 ---
 

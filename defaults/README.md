@@ -37,7 +37,7 @@ The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity
 
 ## Containment
 
-The Envelope carries the containment **contract**: clone mode, network tier, a named network preset, an optional stable `extra_allow` list, and secret names. The full network allowlist, provider endpoints, and secret scopes and values are **local devvm config**: the Owner manages them, Factory records Egress Request decisions and applied rules in its local SQLite, and nothing there is version-controlled. `extra_allow` is empty by default; add a host only when it is a stable project need, never for every egress request. Project Init writes provider endpoints to local config, not to `bindings.dhall` or the Envelope.
+The Envelope carries the containment **contract**: clone mode, network tier, a named network preset, an optional stable `extra_allow` list, and secret names. The full network allowlist, provider endpoints, and secret scopes and values are **local devvm config**: the Owner manages them, and nothing there is version-controlled. `extra_allow` is empty by default; add a host only when it is a stable project need, never for every egress request. Project Init writes provider endpoints to local config, not to `bindings.dhall` or the Envelope.
 
 ## Versioning
 
