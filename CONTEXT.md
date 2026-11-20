@@ -109,7 +109,7 @@ The person Factory serves: the author of workflows and the authority at Checkpoi
 _Avoid_: user, admin, operator
 
 **Project Assistant**:
-The post-v1 per-project client that answers questions, drafts Issues and Workflow Artifact PRs, and talks to a waiting Run; not a Workflow Stage and not a Roster Entry.
+The post-v1 per-project client that answers questions, creates Issues and proposes Workflow Artifact PRs on the Owner's confirmation, and talks to a waiting Run; not a Workflow Stage and not a Roster Entry.
 _Avoid_: chatbot, console agent
 
 **Run**:

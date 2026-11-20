@@ -21,7 +21,7 @@ defaults/
 
 ## Project Init
 
-`factory init` validates the configured harness live, selects a primary model for each default seat (triager, implementer, reviewer/spec-fidelity, reviewer/adversarial), and asks for build/test commands, defaulting to `make build` / `make test`. It then copies the typed files and schema into the project's `.factory/` and writes `bindings.dhall`:
+`factory init` validates the configured harness live, selects a primary model for each default seat (`triager`, `implementer`, `reviewer-spec-fidelity`, `reviewer-adversarial`), and asks for build/test commands, defaulting to `make build` / `make test`. It then copies the typed files and schema into the project's `.factory/` and writes `bindings.dhall`:
 
 ```
 { from = { irVersion = "factory-ir/v1", contentDigest = "..." }
@@ -33,7 +33,7 @@ defaults/
 }
 ```
 
-The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity`, and `reviewer-adversarial`; the binding keys above map to them. Fallback models are added to a seat's list by a later `bindings.dhall` PR. Secret values never appear here; the Envelope names secrets, and the harness or devvm host-side store holds them.
+The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity`, and `reviewer-adversarial`; the binding keys above map to them. Each entry's ordered model list is what `bindings.dhall` supplies, so the roster entry stays the one the IR selects from. Fallback models are added to a seat's list by a later roster or `bindings.dhall` PR. Secret values never appear here; the Envelope names secrets, and the harness or devvm host-side store holds them.
 
 ## Versioning
 
@@ -47,10 +47,10 @@ The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity
 
 ## Vocabulary owned here
 
-- **Metric keys.** Every measure id is one of §6.4's built-in semantic keys: `stage.cycle_time`, `gate.verdict`, `review.findings`, `run.retries`, `run.tokens`, `run.cost`, `model.resolution`, `pr.merge_latency`, `tool.error_rate`, `agent.confusion_proxies`. v1 adds no custom semantic keys.
+- **Metric keys.** Every measure id is one of the spec's §6.4 built-in semantic keys: `stage.cycle_time`, `gate.verdict`, `review.findings`, `run.retries`, `run.tokens`, `run.cost`, `model.resolution`, `pr.merge_latency`, `tool.error_rate`, `agent.confusion_proxies`. v1 adds no custom semantic keys.
 - **Labels.** The default label set is the only set in v1: the intake label `needs-triage` and the post-approval `ready-for-agent` label. Renaming and additions are post-v1.
 - **Node ids.** Every Stage, Gate, Checkpoint, action, and agent entry has a stable id; the golden IR asserts the node paths. The post-v1 Node View groups Runs, events, artifacts, and Gate reports under them.
 
 ## Not here
 
-The prototype under `prototype/workflow-authoring/` is evidence for authoring ergonomics, not a source for this directory. Do not lift its YAML, schema, or IR: its schema requires measures on every Stage, contradicting §4.7, and its Dhall was never compiled.
+The prototype under `prototype/workflow-authoring/` is evidence for authoring ergonomics, not a source for this directory. Do not lift its YAML, schema, or IR: its schema requires measures on every Stage, contradicting the spec's §4.7, and its Dhall was never compiled.

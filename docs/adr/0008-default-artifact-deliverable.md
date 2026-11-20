@@ -9,16 +9,17 @@ Factory ships one **Default Workflow Artifact** in `defaults/`: the typed workfl
 - **Immutable `defaults/v1/`, `defaults/v2/` directories** — rejected: copy-on-init means each project keeps its own copy, so old shapes can live in git history; a live old-shape directory is only needed if two shapes must be served at once.
 - **Render concrete files at init** — rejected for v1: it needs a Dhall value-to-source renderer. A typed generator plus `bindings.dhall` is a smaller, reviewable init surface; a project can flatten its copy later.
 - **Inheritance (`extends` + overrides)** — rejected: ADR-0006 already chose copy-on-init with PR-only deviation and no merge semantics.
-- **Promote the prototype as the default** — rejected: its schema mandates measures against §4.7, its IR drops the poll trigger, and its Dhall was never compiled. It remains evidence.
+- **Promote the prototype as the default** — rejected: its schema mandates measures against the spec's §4.7, its IR drops the poll trigger, and its Dhall was never compiled. It remains evidence.
 
 ## Consequences
 
-- `defaults/` is the conformance gate's subject; §1.5 #6 is falsifiable against `defaults/fixtures/golden.ir.json`.
+- `defaults/` is the conformance gate's subject; the spec's §1.5 #6 is falsifiable against `defaults/fixtures/golden.ir.json`.
 - `bindings.dhall` is the init surface and carries provenance; there is no separate provenance file.
-- Metric ids are the built-in semantic keys of §6.4; the default declares the set, and v1 allows no custom semantic key.
+- Metric ids are the spec's §6.4 built-in semantic keys; the default declares the set, and v1 allows no custom semantic key.
 - The default label set is the v1 set; renaming and additions are post-v1, when the tracker projection becomes data.
-- Every Workflow element gets a stable node id in the IR and the golden IR; grouping Runs and events under a node is the post-v1 Node View (candidate 4b).
+- Every Workflow element gets a stable node id in the IR and the golden IR; grouping Runs and events under a node is the post-v1 Node View.
 - A shape migration is a PR against the project's copy; a content change never propagates.
 - Project Init writes `bindings.dhall`; it does not copy an old default or upgrade one silently.
+- ADR-0007 recorded Project Init writing provider secret names and endpoints into `envelope.dhall`; that clause is superseded: init copies the default envelope and writes provider names and endpoints into `bindings.dhall`, while the Envelope still declares the grants (the spec's §4.4).
 
 Status: accepted 2026-11-20 (architecture review, candidate 2: default artifact).
