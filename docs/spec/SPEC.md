@@ -1,6 +1,6 @@
 # Factory — Specification (v1)
 
-**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007), 2026-11-20 (ADR-0008), and 2026-11-20 (post-v1 clarification conversations)
+**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007), 2026-11-20 (ADR-0008), 2026-11-20 (ADR-0009), and 2026-11-20 (post-v1 clarification conversations)
 
 **Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. The conflicts found while writing it were reconciled against the ADRs and are recorded, with the artifacts changed, in §10. Bare `ADR-000N` and `ticket NNN` references resolve through §11; load-bearing claims link their path directly.
 
@@ -162,7 +162,7 @@ Rules that keep the seam honest:
 - **No setup as a health-check side effect.** Opening a session must not trigger MCP servers, hooks, or logins (ticket 006).
 - **Runtime events are not state.** Only a committed transition advances a Task (ticket 002).
 
-**Post-v1 capability: `conversation_threads`.** The Conversation model (§7.5) needs a declared capability to open or attach a conversation thread, send, read, close, and link it to an Issue or Run. v1 does not use it, so it is not in the capability table above and no v1 adapter declares it. When it lands, the declared-not-assumed rule applies unchanged: a Stage that requires an undeclared capability is rejected at compile time, or the Task blocks with evidence, and it never degrades silently.
+**Post-v1 capability: `conversation_threads`.** The Conversation model (§7.5) needs a declared capability to open or attach a conversation thread, send, read, close, and link it to an Issue or Run. v1 does not use it, so it is not in the capability table above and no v1 adapter declares it. When it lands, the capability is enforced at compile time: a Stage that requires it against an adapter that does not declare it is rejected, never blocked later or degraded silently.
 
 `driver` and `workspace reference` are ticket 006's contract vocabulary; elsewhere this spec says adapter kind and working copy.
 
@@ -765,7 +765,7 @@ v1 ships the CLI only. Three post-v1 Factory clients consume the same API and do
 
 ### 7.5 Post-v1: Clarification conversations and handoff
 
-Post-v1 adds a third triage outcome — `NeedsInfo` — and a richer surface for the conversation that resolves it. This is a direction, not a v1 behavior: no v1 schema, Gate, Stage, or Task state changes (§3.4).
+Post-v1 adds an alternative triage outcome — `NeedsInfo` — and a richer surface for the conversation that resolves it. This is a direction, not a v1 behavior: no v1 schema, Gate, Stage, or Task state changes (§3.4).
 
 **Flow.**
 
@@ -776,18 +776,18 @@ Post-v1 adds a third triage outcome — `NeedsInfo` — and a richer surface for
 
 **Conversation record.** A Conversation is a Factory record linked to an Issue or a Run ([`CONTEXT.md`](../../CONTEXT.md)). It carries the hosting surface and its provider reference (thread or session id), the opening request or trigger, participant identities, references to the messages (transcript references, not copies, §6.1), the summary posted to the Issue, and its lifecycle. Messages are evidence: they inform a decision, they are not Workflow state, and a Conversation never appears in a Stage's transition history as an outcome. Human messages in a session-hosted Conversation are steers in the activity log (§6.3); a tracker-hosted exchange lands on the Issue as comments. Repeated clarifications remain a mining priority (§6.8).
 
-**Summary back to the Issue.** The Issue gets a summary and a link, not a copy of the chat. The Issue is the durable record the Owner and the next agent read; a raw transcript is long, surface-specific, and may carry content that does not belong on the tracker. The summary is the artifact of the Conversation and is linked from both sides. On the GitHub-comments fallback the exchange already lives on the Issue: the summary is its own comment and the link points at the thread.
+**Summary back to the Issue.** The Issue gets a summary and a link, not a transcript of the exchange. The Issue is the durable record the Owner and the next agent read; a raw transcript is long, surface-specific, and may carry content that does not belong on the tracker. The summary is the artifact of the Conversation and is linked from both sides. On the GitHub-comments fallback the exchange already lives on the Issue: the summary is its own comment and the link points at the thread.
 
 **Security boundary.** The agent in a Conversation has a scoped tool set: it may read the Issue, ask and answer questions, and write messages to the Conversation record. It cannot merge, transition the tracker, advance Workflow state, or use Project VM credentials. Only the `TriageDecision` and its Checkpoint advance the Loop; a Conversation cannot. Who else may join a Conversation — guests, a second Owner — is fog (§9.1).
 
-**T3 Code: surface now, adapter later.** Two post-v1 options are recorded; neither is chosen here.
+**T3 Code: surface or adapter.** Two post-v1 options are recorded; neither is chosen here.
 
-- **Surface/client.** Factory launches a T3 thread through the T3 API, stores the link on the Conversation record, and the agent inside the thread uses Factory's tools, including reading the Issue, reporting answers, and attaching artifacts. T3 hosts the chat; Factory owns the record and the boundary.
+- **Surface/client.** Factory launches a T3 thread through the T3 API, stores the link on the Conversation record, and the agent inside the thread uses Factory's tools, including reading the Issue, reporting answers, and attaching artifacts. T3 hosts the thread; Factory owns the record and the boundary.
 - **`RuntimeAdapter`.** T3 is a future execution adapter through ADR-0002's seam, a peer of OpenCode, not a conversation host.
 
 They are compatible but distinct; choosing either is a future ADR.
 
-**Forward-looking API note.** The post-v1 API exposes Conversation as a resource — query, open/handoff, message, close, subscribe — for the Project Assistant, the Node View (§7.4), and a T3 surface. It reads and writes Conversation records and streams messages; it does not advance Workflow state, which still comes only from a committed transition. The full contract belongs to the future client API (candidate 4), not this spec.
+**Forward-looking API note.** The post-v1 API exposes Conversation as a resource — query, open/handoff, message, close, subscribe — for the Project Assistant, the Node View (§7.4), and a T3 surface. It reads and writes Conversation records and streams messages; it does not advance Workflow state, which still comes only from a committed transition. The full contract belongs to the future client API design, not this spec.
 
 ---
 

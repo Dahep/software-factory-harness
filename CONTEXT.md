@@ -106,7 +106,7 @@ _Avoid_: approval, sign-off
 
 **Conversation**:
 A durable human-agent exchange linked to an Issue or a Run, hosted by a tracker, a runtime thread, or an external client; its messages are evidence, not Workflow state. A triage clarification and a waiting-agent conversation are both Conversations; a "thread" is the external surface, not the Factory record.
-_Avoid_: chat, thread
+_Avoid_: chat
 
 **Agent Confusion**:
 A measured property of a Run, expressed through proxies (repeated identical tool calls, file thrash, plan revisions, abandonment or retry, reviewer-flagged misunderstanding, self-reported uncertainty) rather than a subjective score.
