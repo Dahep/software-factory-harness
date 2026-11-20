@@ -10,7 +10,7 @@ The Dhall files and `fixtures/golden.ir.json` are authored in build step 1. This
 defaults/
   workflow.dhall           # stages, waves, gates and failure policies, checkpoints, actions, measures
   roster.dhall             # Agent Roster: four entries; model lists come from bindings
-  envelope.dhall           # clone mode, network tier/allowlist, secret names, spend measurement
+  envelope.dhall           # clone mode, network tier and preset, optional extra_allow, secret names
   bindings.example.dhall   # the init surface, with placeholder values
   schema/                  # the Dhall types plus TriageDecision and review schemas
   fixtures/
@@ -28,12 +28,16 @@ defaults/
 , models = { triager = ["..."], implementer = ["..."],
              reviewerSpecFidelity = ["..."], reviewerAdversarial = ["..."] }
 , commands = { build = ["make", "build"], tests = ["make", "test"] }
-, providers = { github = { secret = "github", hosts = ["github.com", "api.github.com"] },
-                model = { secret = "model-provider", hosts = ["..."] } }
+, providers = { github = { secret = "github" },
+                model = { secret = "model-provider" } }
 }
 ```
 
 The default roster entries are `triager`, `implementer`, `reviewer-spec-fidelity`, and `reviewer-adversarial`; the binding keys above map to them. Each entry's ordered model list lives in `bindings.dhall`, so the roster entry stays the selector the IR compiles. Fallback models are added to a seat's list by a later roster or `bindings.dhall` PR. Secret values never appear here; the Envelope names secrets, and the harness or devvm host-side store holds them.
+
+## Containment
+
+The Envelope carries the containment **contract**: clone mode, network tier, a named network preset, an optional stable `extra_allow` list, and secret names. The full network allowlist, provider endpoints, and secret scopes and values are **local devvm config**: the Owner manages them, and nothing there is version-controlled. `extra_allow` is empty by default; add a host only when it is a stable project need, never for every egress request. Project Init writes provider endpoints to local config, not to `bindings.dhall` or the Envelope.
 
 ## Versioning
 

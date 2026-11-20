@@ -17,15 +17,19 @@ The devvm instance that backs a Managed Project: the sandbox, network, and secre
 _Avoid_: sandbox, container, environment
 
 **Project Envelope**:
-The containment declaration in a Workflow Artifact — clone mode, network tier and allowlist, secret bindings, spend measurement — that Factory compiles into the Project VM.
+The containment contract in a Workflow Artifact — clone mode, network tier and named network preset, an optional stable `extra_allow` list, and secret names — that Factory compiles into the Project VM. The full allowlist, provider endpoints, and secret scopes are local devvm config, not part of the artifact.
 _Avoid_: config, settings, policy
+
+**Local devvm config**:
+The operational devvm configuration the Owner manages: the full network allowlist, provider endpoints, and secret scopes and values. It is not version-controlled and not part of the Workflow Artifact.
+_Avoid_: runtime config, settings
 
 **Capability Profile**:
 A post-v1 refinement of the Project Envelope: a narrower set of network, secret, and Factory-reach permissions for one role, compiled through the same path.
 _Avoid_: role, permission set
 
 **Egress Request**:
-A blocked network access attempt that devvm surfaces to the Owner for an allow-or-deny decision, recorded with its outcome.
+A blocked network access attempt that devvm surfaces to the Owner for an allow-or-deny decision; the decision and the applied local rule are recorded in Factory's local database, and the rule is applied to local devvm config.
 _Avoid_: block, exception
 
 **Subproject**:
@@ -65,7 +69,7 @@ The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; Wave
 _Avoid_: runtime configuration, agent config, team
 
 **Roster Entry**:
-One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, declared requirements (secrets, hosts, tool classes, modality), and budget. A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
+One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, and declared requirements (secret names, tool classes, modality). A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
 _Avoid_: agent config, worker
 
 **Model Catalog**:
