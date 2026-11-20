@@ -85,7 +85,7 @@ The Workflow-defined action a failure triggers: retry within the Stage, return t
 _Avoid_: error handling, fallback, retry
 
 **TriageDecision**:
-The typed result of the Triage Stage: suggested labels and priority, acceptance criteria, plan sketch, size estimate, confidence, and open questions — approved or edited by the Owner before a Task exists.
+The typed result of the Triage Stage: suggested labels and priority, acceptance criteria, plan sketch, size estimate, confidence, and open questions — approved or edited by the Owner before a Task exists. Post-v1, triage may instead return `NeedsInfo` with a `ClarificationRequest` (questions, missing fields, context); that is a direction, not a v1 outcome.
 _Avoid_: assessment, analysis
 
 **Workflow Artifact**:
@@ -103,6 +103,10 @@ _Avoid_: onboarding, setup
 **Checkpoint**:
 A point in the Loop where the Owner must decide; the Owner's decision is recorded as part of the Task's history.
 _Avoid_: approval, sign-off
+
+**Conversation**:
+A durable human-agent exchange linked to an Issue or a Run, hosted by a tracker, a runtime thread, or an external client; its messages are evidence, not Workflow state. A triage clarification and a waiting-agent conversation are both Conversations; a "thread" is the external surface, not the Factory record.
+_Avoid_: chat
 
 **Agent Confusion**:
 A measured property of a Run, expressed through proxies (repeated identical tool calls, file thrash, plan revisions, abandonment or retry, reviewer-flagged misunderstanding, self-reported uncertainty) rather than a subjective score.

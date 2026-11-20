@@ -1,6 +1,6 @@
 # Factory — Specification (v1)
 
-**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007) and 2026-11-20 (ADR-0008)
+**Status:** build-ready planning artifact · 2026-11-18, amended 2026-11-19 (ADR-0007), 2026-11-20 (ADR-0008), 2026-11-20 (ADR-0009), and 2026-11-20 (post-v1 clarification conversations)
 
 **Relationship to the record.** This spec is the destination of the wayfinder map at [`docs/wayfinding/map.md`](../wayfinding/map.md). It restates decisions; it does not make them. Decisions live in [`docs/adr/`](../adr/) and in the resolutions of the closed tickets under [`docs/wayfinding/closed/`](../wayfinding/closed/); the glossary is [`CONTEXT.md`](../../CONTEXT.md). Where this spec is silent, the ADR and ticket win. The conflicts found while writing it were reconciled against the ADRs and are recorded, with the artifacts changed, in §10. Bare `ADR-000N` and `ticket NNN` references resolve through §11; load-bearing claims link their path directly.
 
@@ -60,6 +60,7 @@ Out of scope by decision, not by omission:
 - **External-server mode.** OpenCode runs as a Factory-managed server per Project VM; attaching to an existing external server is post-v1 (ticket 006).
 - **Owner TUI/web UI.** The CLI is the surface; TUI and web clients arrive on the same API (ADR-0005).
 - **Project Console, Node View, and Project Assistant.** v1 is CLI only; the post-v1 direction is §7.4.
+- **Clarification conversations.** v1 triage is decision-only. The post-v1 `NeedsInfo` branch and its conversation surfaces are §7.5.
 - **Spend caps and budgets.** Cost is tracked when the adapter reports usage; v1 has no `budget` field and no cap (ADR-0004, ADR-0009).
 - **Post-merge monitoring and fix cycles**, and **sub-Issue decomposition in Triage** (ticket 008).
 - **Code-mode / sandboxed composition** as a Workflow layer. The pattern is reserved as a future adapter capability; an LLM-authored script is never the Workflow and never a Gate (ADR-0002, ticket 015).
@@ -161,6 +162,8 @@ Rules that keep the seam honest:
 - **No setup as a health-check side effect.** Opening a session must not trigger MCP servers, hooks, or logins (ticket 006).
 - **Runtime events are not state.** Only a committed transition advances a Task (ticket 002).
 
+**Post-v1 capability: `conversation_threads`.** The Conversation model (§7.5) needs a declared capability to open or attach a conversation thread, send, read, close, and link it to an Issue or Run. v1 does not use it, so it is not in the capability table above and no v1 adapter declares it. When it lands, the capability is enforced at compile time: a Stage that requires it against an adapter that does not declare it is rejected, never blocked later or degraded silently.
+
 `driver` and `workspace reference` are ticket 006's contract vocabulary; elsewhere this spec says adapter kind and working copy.
 
 The Task's `capability-profile ref` **resolves to the Managed Project's Project Envelope in v1**, validated against the compiled envelope; the field stays reserved for post-v1 profiles (ticket 006 amendment, ADR-0004). Post-v1, a profile attaches to a Roster Entry's policy reference (ADR-0007).
@@ -253,6 +256,8 @@ The tracker remains the authoritative record of the Issue; Factory is authoritat
 
 No Issue transition happens before the Triage Checkpoint (ADR-0004).
 
+**Post-v1 note.** The clarification branch's `NeedsInfo` state (§3.4, §7.5) is a Factory-side state that Factory records against the Issue, not a tracker transition: the tracker still sees no label or state change before the Triage Checkpoint (ADR-0004). It is not a Task state and leaves this table unchanged.
+
 ### 3.3 Intake
 
 The daemon polls the Managed Project's tracker on a configurable interval; webhooks are post-v1 (ADR-0005). New Issues enter Triage. The existing backlog is **not** swept: it stays out until labeled (ticket 008). Admission is by the Workflow's intake label; the `defaults/` artifact names it (`needs-triage`), and it is distinct from the post-approval `ready-for-agent` label. Those two are the v1 label set: renaming or adding labels is post-v1, when the tracker projection becomes data (ADR-0008).
@@ -266,6 +271,8 @@ A triager session produces a typed **`TriageDecision`**: suggested labels and pr
 The Owner approves or edits at the **triage-approval Checkpoint**. Edits are recorded as part of the decision. Approval applies `ready-for-agent` and creates the Task; rejection records the reason, comments on the Issue, and creates no Task.
 
 The triager proposes transitions; it cannot apply them. Every transition after approval goes through Factory tools (ADR-0004).
+
+**Post-v1 clarification branch.** Post-v1, the triager's outcome may instead be `NeedsInfo` — a `ClarificationRequest` naming the questions, the missing fields, and the context it needs — and the Issue enters a pre-Task `NeedsInfo` state (§3.2) while the exchange runs under §7.5. The answers inform a later `TriageDecision`; they do not stand in for one, and the Issue stays authoritative. v1 is decision-only: the `TriageDecision` schema, the `decision-shape` and `scope-declared` Gates, and the Task state table are unchanged.
 
 ### 3.5 Implement
 
@@ -750,11 +757,37 @@ All are clients of the same API; none reads the database.
 
 ### 7.4 Post-v1: Project Console and Project Assistant
 
-v1 ships the CLI only. Three post-v1 clients consume the same API and do not change the control plane: the **Project Console** (a per-project browser client for Tasks, Runs, Gate reports, and metrics), the **Node View**, and the **Project Assistant**. They are scoped per Managed Project first; a Factory-wide overview is later.
+v1 ships the CLI only. Three post-v1 Factory clients consume the same API and do not change the control plane: the **Project Console** (a per-project browser client for Tasks, Runs, Gate reports, and metrics), the **Node View**, and the **Project Assistant**. They are scoped per Managed Project first; a Factory-wide overview is later.
 
 - **Node View.** One node at a time — any element the Workflow defines: a Stage, Gate, Checkpoint, action, or agent entry. It groups the node's Runs, model attempts, activity events, artifacts, Gate reports, and transcript references, and can follow the Run's normalized event stream live. The node path is stable in the IR (v1); the run/event path columns and the view itself are post-v1. A rich view depends on the observability schema fog (§9.1).
 - **Project Assistant.** A per-project client, not a Workflow Stage and not a Roster Entry. It reads project state and a node's work; it may create an Issue (recorded, with the intake label), propose a `.factory/` change as a PR, and send a message to a waiting Run — each with Owner confirmation. Its answer to a question is a transient artifact the Owner can view and discard; there is no separate report capability. It never merges, transitions the tracker, advances Workflow state, holds the Project VM's credentials, or records a Checkpoint decision on the Owner's behalf.
-- **Waiting-agent conversation.** When an agent waits for a human, its Run enters `waiting_for_human`; the Task may be Blocked or still in its Stage. The Owner's message is a recorded command; the adapter steers or resumes the session, and the conversation lands in the transcript and activity log. A conversation can unblock or inform the agent, but it cannot advance the Workflow; a Checkpoint decision remains a separate harness record. If the session is gone, the conversation is not possible: the Task is Blocked with evidence and resumes per policy with a fresh session and handoff summary.
+- **Waiting-agent conversation.** When an agent waits for a human, its Run enters `waiting_for_human`; the Task may be Blocked or still in its Stage. The Owner's message is a recorded command; the adapter steers or resumes the session, and the conversation lands in the transcript and activity log. A conversation can unblock or inform the agent, but it cannot advance the Workflow; a Checkpoint decision remains a separate harness record. If the session is gone, the conversation is not possible: the Task is Blocked with evidence and resumes per policy with a fresh session and handoff summary. A waiting-agent exchange and a triage clarification are both Conversations (§7.5), the same record the post-v1 API exposes as a resource.
+
+### 7.5 Post-v1: Clarification conversations and handoff
+
+Post-v1 adds an alternative triage outcome — `NeedsInfo` — and a richer surface for the conversation that resolves it. This is a direction, not a v1 behavior: no v1 schema, Gate, Stage, or Task state changes (§3.4).
+
+**Flow.**
+
+1. The triager returns `NeedsInfo` with a `ClarificationRequest`: the questions, the missing fields, and the context behind each. The Issue enters the pre-Task `NeedsInfo` state (§3.2).
+2. The triager hands the Conversation to the richest surface available: preferably a T3 Code thread, then an OpenCode session, with GitHub Issue comments as the fallback.
+3. Answers arrive as messages. Factory posts a summary and a link on the Issue; the Issue stays authoritative.
+4. Triage re-runs over the summary and the Issue's current state and produces the `TriageDecision` it could not produce before. The normal Gates and triage-approval Checkpoint follow, and only approval creates the Task.
+
+**Conversation record.** A Conversation is a Factory record linked to an Issue or a Run ([`CONTEXT.md`](../../CONTEXT.md)). It carries the hosting surface and its provider reference (thread or session id), the opening request or trigger, participant identities, references to the messages (transcript references, not copies, §6.1), the summary posted to the Issue, and its lifecycle. Messages are evidence: they inform a decision, they are not Workflow state, and a Conversation never appears in a Stage's transition history as an outcome. Human messages in a session-hosted Conversation are steers in the activity log (§6.3); a tracker-hosted exchange lands on the Issue as comments. Repeated clarifications remain a mining priority (§6.8).
+
+**Summary back to the Issue.** The Issue gets a summary and a link, not a transcript of the exchange. The Issue is the durable record the Owner and the next agent read; a raw transcript is long, surface-specific, and may carry content that does not belong on the tracker. The summary is the artifact of the Conversation and is linked from both sides. On the GitHub-comments fallback the exchange already lives on the Issue: the summary is its own comment and the link points at the thread.
+
+**Security boundary.** The agent in a Conversation has a scoped tool set: it may read the Issue, ask and answer questions, and write messages to the Conversation record. It cannot merge, transition the tracker, advance Workflow state, or use Project VM credentials. Only the `TriageDecision` and its Checkpoint advance the Loop; a Conversation cannot. Who else may join a Conversation — guests, a second Owner — is fog (§9.1).
+
+**T3 Code: surface or adapter.** Two post-v1 options are recorded; neither is chosen here.
+
+- **Surface/client.** Factory launches a T3 thread through the T3 API, stores the link on the Conversation record, and the agent inside the thread uses Factory's tools, including reading the Issue, reporting answers, and attaching artifacts. T3 hosts the thread; Factory owns the record and the boundary.
+- **`RuntimeAdapter`.** T3 is a future execution adapter through ADR-0002's seam, a peer of OpenCode, not a conversation host.
+
+They are compatible but distinct; choosing either is a future ADR.
+
+**Forward-looking API note.** The post-v1 API exposes Conversation as a resource — query, open/handoff, message, close, subscribe — for the Project Assistant, the Node View (§7.4), and a T3 surface. It reads and writes Conversation records and streams messages; it does not advance Workflow state, which still comes only from a committed transition. The full contract belongs to the future client API design, not this spec.
 
 ---
 
@@ -855,11 +888,12 @@ Dependency-ordered, each step ending in a verifiable state:
 
 ### 9.1 Fog
 
-Three questions remain unspecified in the record. This spec does not answer them.
+Four questions remain unspecified in the record. This spec does not answer them.
 
 1. **Observability schema detail.** The envelope's field names are decided (ticket 004, §6.2); its allowed-value enums, indexing, retention windows, and the queries mining runs over are not. Until they are, the log is a schema without an operational contract: implementers will otherwise invent value names and indexes that mining then depends on. Related detail: whether workflow facts (Gate verdicts, Checkpoints, effects) surface as additional activity kinds or stay transition-log-only.
 2. **Path-to-other-users surface.** Packaging, onboarding, the configuration surface a second Owner would need, multi-user auth, and how a second Owner's projects are isolated. The map defers design until the Owner's needs are fully specified; the four seams in §1.2 are what keeps the door open.
 3. **Project Assistant capability set.** Beyond the boundaries §7.4 records — never merge, never transition the tracker, never advance Workflow state, no Project VM credentials, no Checkpoint decision on the Owner's behalf — the assistant's tool surface, confirmation rules, and transient-artifact behavior are not specified.
+4. **Clarification conversation access and shape.** Guest or multi-user access to a Conversation, whether T3 is a surface or a `RuntimeAdapter` (§7.5), retention of conversation transcripts, and whether clarification needs a dedicated agent beyond the triager are unspecified.
 
 Everything else is deferred by decision; §1.4 is the authoritative list, and none of it is fog. Per-Run VMs are not a deferral: they remain an escalation option, unused by v1 (ticket 017).
 
