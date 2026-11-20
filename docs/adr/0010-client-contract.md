@@ -29,4 +29,4 @@ Every Factory client — the v1 CLI, and later the Project Console, Node View, P
 - CLI and daemon ship one release train and check `apiVersion` at startup; a self-hosted upgrade's guaranteed skew is a typed refusal, not a half-working surface.
 - Loopback TCP, browser token delivery, multi-user grants, remote/worker transport, and the plugin's agent-side tool channel remain fog; the contract is host-agnostic by construction so each is an extension rather than a rewrite.
 
-Status: accepted 2026-11-20 (architecture review, candidate 4: Factory client API; review record: the PR that lands this ADR).
+Status: accepted 2026-11-20 (architecture review, candidate 4: Factory client API; review record: PR #6).
