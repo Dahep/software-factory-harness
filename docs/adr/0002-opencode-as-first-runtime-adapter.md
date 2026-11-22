@@ -15,4 +15,4 @@ Factory's harness is a hybrid: a Go-owned deterministic control plane (workflow 
 - Capability enforcement lives in the adapter + a minimal Factory plugin; an optional sandboxed composition surface is reserved as a capability, never conflated with the typed workflow graph.
 - Architectural lock-in is bounded: swapping runtimes means one adapter replacement plus translating agent/model/permission/tool config; Factory's durable records and artifacts stay portable.
 
-Status: accepted 2026-11-18 (wayfinder ticket: harness substrate). Amended 2026-11-19: runtime configuration is the project-owned Agent Roster (ADR-0007); adapter Outcomes carry failure reasons and attempt trails.
+Status: accepted 2026-11-18 (wayfinder ticket: harness substrate). Amended 2026-11-19: runtime configuration is the project-owned Agent Roster (ADR-0007); adapter Outcomes carry failure reasons and attempt trails. Amended 2026-11-22: a model exhaustion is returned to the agent node, and the adapter declares session liveness (`heartbeat`, `idle-timeout-only`, or `none`) (ADR-0010).

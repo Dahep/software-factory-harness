@@ -15,4 +15,4 @@ Factory's first milestone is the issue-driven loop — intake → triage → imp
 - Factory's own repository is subproject one; the initial build is manual, after which Factory drives its own changes.
 - Every Run records the metrics the measure-to-improve directive requires, including agent-confusion proxies.
 
-Status: accepted 2026-11-18 (wayfinder ticket: shape of the first milestone, the issue-driven loop).
+Status: accepted 2026-11-18 (wayfinder ticket: shape of the first milestone, the issue-driven loop). Amended 2026-11-22: the loop's stages are display groups in a node/edge graph; waves, gates, and failure routes are node and edge data (ADR-0010).

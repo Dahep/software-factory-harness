@@ -37,11 +37,11 @@ A managed project served by Factory where the work being done belongs to Factory
 _Avoid_: self-hosting target, self-managed repo
 
 **Workflow**:
-The typed, declarative graph of stages a Task moves through in a Managed Project, authored in the Workflow Artifact (ADR-0006); the unit of project-defined behavior, not harness code.
+The typed, declarative graph of nodes and edges a Task moves through in a Managed Project, authored in the Workflow Artifact (ADR-0006, ADR-0010); the unit of project-defined behavior, not harness code.
 _Avoid_: pipeline, script, automation
 
 **Task**:
-A unit of work admitted into a Workflow, derived from a tracker Issue and owned by Factory until it is merged or abandoned.
+A unit of work admitted into a Workflow graph, derived from a tracker Issue and owned by Factory until it is merged or abandoned.
 _Avoid_: ticket, job, item
 
 **Issue**:
@@ -49,27 +49,55 @@ The tracker artifact a Task is derived from; the tracker remains its authoritati
 _Avoid_: ticket, task
 
 **Loop**:
-The recurring path a Task takes through a Workflow: intake → triage → implement → review → merge.
+The recurring path a Task takes through the default Workflow graph: intake → triage → implement → review → merge.
 _Avoid_: cycle, flow
 
+**Node**:
+The core primitive of a Workflow: a stable, addressable execution element with a kind, typed config, optional display group, and outgoing edges. The primitive kinds are agent, gate, checkpoint, action, trigger, route, and terminal.
+_Avoid_: step, task, stage
+
+**Edge**:
+A guarded transition between two nodes: what activates it (`success`, `failure`, `event`, `decision`, `timeout`, or `always`), an optional CEL guard, and an optional traversal bound. A cycle is valid only when at least one edge in it is bounded.
+_Avoid_: link, arrow, transition
+
+**Trigger**:
+A node that waits for typed external events. The harness owns polling, dedupe, and reconciliation; the Workflow owns the event match, actor guard, and target edge. A trigger and a checkpoint can accept events while waiting.
+_Avoid_: webhook, listener, watcher
+
+**Action**:
+A node that performs one typed effect from the harness's closed action registry — for example git push, git sync, PR creation, merge, or a tracker effect. The Workflow selects and parameterizes the action; it never runs arbitrary host code.
+_Avoid_: step, task, script
+
+**Terminal**:
+A node that ends a Task as merged, abandoned, or failed.
+_Avoid_: end, finish
+
 **Stage**:
-One named step of a Loop (Triage, Implement, Review, Merge) that can dispatch a Wave and must pass its Gates to advance.
-_Avoid_: phase, step
+A display grouping of nodes in a Workflow (for example Triage, Implement, Review, Merge), used for readability, metrics, and the later Node View. It is not an execution unit and cannot dispatch or gate anything by itself.
+_Avoid_: phase, step, execution stage
 
 **Wave**:
-The set of agent sessions dispatched together within a Stage for one Task, defined by the Workflow (e.g. one implementer with two reviewers).
+The set of agent sessions dispatched together by one agent node for one Task, defined by the Workflow (e.g. one implementer with two reviewers).
 _Avoid_: team, swarm, fan-out
 
-**Node**:
-A stable, addressable element of a Workflow — a Stage, Gate, Checkpoint, action, or agent entry — under which Runs, events, artifacts, and Gate reports are grouped.
-_Avoid_: step, task
+**Agent Outcome**:
+The typed result of an agent session: Completed, Incomplete, Stalled, Crashed, Exhausted, Blocked, or Refused. The harness classifies it; the Workflow routes on its edges.
+_Avoid_: status, result
+
+**Feedback**:
+A typed artifact carried on an edge into an agent node — a Gate report, review findings, PR feedback, or an agent outcome — so the next Run starts with the evidence of what failed.
+_Avoid_: advice, retry prompt
+
+**Session Liveness**:
+The harness's evidence that an agent session is alive: an adapter heartbeat, idle timeout, and deadline. The adapter declares whether it can provide a heartbeat; otherwise liveness is idle-timeout-only or unobserved, never assumed.
+_Avoid_: health check, keepalive
 
 **Agent Roster**:
-The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; Wave entries select from it by id. It is part of the Workflow Artifact and compiles into the IR.
+The project-scoped, typed set of Roster Entries in `.factory/roster.dhall`; agent nodes select from it by id. It is part of the Workflow Artifact and compiles into the IR.
 _Avoid_: runtime configuration, agent config, team
 
 **Roster Entry**:
-One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, and declared requirements (secret names, tool classes, modality). A Wave entry selects an entry by id; a Stage cannot override its model, tools, or parameters. Informally, a seat.
+One agent definition in the Agent Roster: id, role, persona, instructions, ordered model list (which lives in `bindings.dhall`, ADR-0008), tool and permission policy reference, adapter options, and declared requirements (secret names, tool classes, modality). An agent node selects an entry by id; a node cannot override its model, tools, or parameters. Informally, a seat.
 _Avoid_: agent config, worker
 
 **Model Catalog**:
@@ -77,19 +105,19 @@ The adapter's declaration of available model IDs, providers, capabilities (inclu
 _Avoid_: model list, allowlist, provider config
 
 **Gate**:
-A harness-enforced condition that must pass before a Task advances; its verdict is deterministic and never an agent's judgment. Each Gate carries its own failure policy, defined in the Workflow.
+A harness-enforced condition evaluated by a gate node; its verdict is deterministic and never an agent's judgment. A Gate report is a first-class record, and a failing edge can carry it as Feedback to an agent node.
 _Avoid_: check, criteria, approval
 
 **Failure Policy**:
-The Workflow-defined action a failure triggers: retry within the Stage, return the Task to an earlier Stage, open a follow-up Issue, change Issue state, or wait for the Owner. A Gate carries one for its verdict; a Stage carries one for Run-level failures outside a Gate (model exhaustion, a crashed Run), with the same actions and bounds.
+The Workflow-defined edge a failure takes, with a guard and a bound: retry the node, return to an earlier node, open a follow-up Issue, change Issue state, or wait for the Owner. A failure policy is graph data, not a harness behavior; a cycle without a bound is invalid IR.
 _Avoid_: error handling, fallback, retry
 
 **TriageDecision**:
-The typed result of the Triage Stage: suggested labels and priority, acceptance criteria, plan sketch, size estimate, confidence, and open questions — approved or edited by the Owner before a Task exists. Post-v1, triage may instead return `NeedsInfo` with a `ClarificationRequest` (questions, missing fields, context); that is a direction, not a v1 outcome.
+The typed result of the triage agent node: suggested labels and priority, acceptance criteria, plan sketch, size estimate, confidence, and open questions — approved or edited by the Owner before a Task exists. Post-v1, triage may instead return `NeedsInfo` with a `ClarificationRequest` (questions, missing fields, context); that is a direction, not a v1 outcome.
 _Avoid_: assessment, analysis
 
 **Workflow Artifact**:
-The version-controlled artifact a Managed Project carries in its own repository: its Workflow, Agent Roster, bindings, and Project Envelope, rendered from the Default Workflow Artifact by Project Init (ADR-0006, ADR-0007, ADR-0008). Provider authentication is not part of the artifact; it stays harness- and host-side.
+The version-controlled artifact a Managed Project carries in its own repository: its Workflow graph, Agent Roster, bindings, and Project Envelope, rendered from the Default Workflow Artifact by Project Init (ADR-0006, ADR-0007, ADR-0008, ADR-0010). v1 carries one Workflow definition per Managed Project. Provider authentication is not part of the artifact; it stays harness- and host-side.
 _Avoid_: config file, pipeline definition
 
 **Default Workflow Artifact**:
@@ -101,7 +129,7 @@ The act of adopting a repository as a Managed Project: Factory validates the con
 _Avoid_: onboarding, setup
 
 **Checkpoint**:
-A point in the Loop where the Owner must decide; the Owner's decision is recorded as part of the Task's history.
+A checkpoint node where the Owner must decide; the Owner's decision is recorded as part of the Task's history. A pending checkpoint can accept event edges, so moved evidence or new PR feedback can interrupt it rather than silently approving stale work.
 _Avoid_: approval, sign-off
 
 **Conversation**:
@@ -117,13 +145,13 @@ The person Factory serves: the author of workflows and the authority at Checkpoi
 _Avoid_: user, admin, operator
 
 **Project Assistant**:
-The post-v1 per-project client that answers questions, creates Issues and proposes Workflow Artifact PRs on the Owner's confirmation, and talks to a waiting Run; not a Workflow Stage and not a Roster Entry.
+The post-v1 per-project client that answers questions, creates Issues and proposes Workflow Artifact PRs on the Owner's confirmation, and talks to a waiting Run; not a Workflow node and not a Roster Entry.
 _Avoid_: chatbot, console agent
 
 **Run**:
-One execution of a Task (or of a Stage's Wave) recorded in Factory's durable history.
+One execution of a Task's node recorded in Factory's durable history. An agent node's wave records each session's Outcome and model attempt trail under that Run.
 _Avoid_: attempt, execution, session
 
 **RuntimeAdapter**:
-The seam through which Factory delegates agent execution to a runtime; it normalizes runtime behavior into Factory's task/outcome vocabulary.
+The seam through which Factory delegates agent execution to a runtime; it normalizes runtime behavior, agent outcomes, and session liveness into Factory's vocabulary.
 _Avoid_: provider, integration, driver
