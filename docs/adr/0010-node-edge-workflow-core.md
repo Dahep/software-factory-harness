@@ -45,4 +45,4 @@ v1 remains one Workflow definition per Managed Project. The IR carries a `workfl
 - The Client API's `workflow.get` returns the graph, `task.get` returns `currentNode` and generic state, and no `rework` or `sync` operation exists.
 - ADR-0006 is amended: the typed declarative graph is now a node/edge graph, and Stage is a display group.
 
-Status: accepted 2026-11-22 (Owner design decision; review record: this PR).
+Status: accepted 2026-11-22 (Owner design decision; review record: PR #7).
