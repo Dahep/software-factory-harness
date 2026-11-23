@@ -135,7 +135,7 @@ One SQLite database in WAL mode, daemon-only writer, project-scoped rows (ADR-00
 | Projections | Current state per Managed Project, Task, Run, node, Gate, and pending trigger/checkpoint | Derived from the log; safe to rebuild; never authoritative over the log |
 | Snapshots | Bounded replay | Taken at a log sequence; a snapshot plus its suffix reproduces state |
 
-The write discipline follows the effect-runner shape (ticket 002): **commit a valid transition and its effect intent first; perform the external effect outside that decision; record the result as a new transition.** External effects are reconciled before retry — read provider state, then act (§3.12).
+The write discipline follows the effect-runner shape (ticket 002): **commit a valid transition and its effect intent first; perform the external effect outside that decision; record the result as a new transition.** External effects are reconciled before retry — read provider state, then act (§3.11).
 
 Log event types the transition log must carry (fields, not DDL):
 
@@ -199,7 +199,7 @@ The Owner's decision is **one Project VM per Managed Project**, reused across Ta
 
 - The boundary is the project, not the Task, the agent, or the Wave. Every session of a Wave shares the Task's Project VM.
 - A per-Run VM is an escalation option (untrusted input, destructive work), not a default; v1 does not need it. The 17-concurrent-VM cap is therefore not a v1 constraint.
-- When concurrency is greater than one (§3.10), each Task gets its own working copy inside the Project VM — a `git worktree` on a unique branch is the default, with a separate clone as the fallback. Worktrees isolate files and branches, not build caches, ports, databases, or CPU; a project whose tests need exclusive services keeps concurrency at 1. **⟨default D4⟩**
+- When concurrency is greater than one (§3.9), each Task gets its own working copy inside the Project VM — a `git worktree` on a unique branch is the default, with a separate clone as the fallback. Worktrees isolate files and branches, not build caches, ports, databases, or CPU; a project whose tests need exclusive services keeps concurrency at 1. **⟨default D4⟩**
 - The VM starts on first work and stops only when no Task is active and the idle period has elapsed (default ~30 minutes, configurable — ticket 010); starting a Task pays a VM start cost (ADR-0005).
 - The VM holds the Managed Project's **read-only** GitHub token; push, PR creation, merge, and tracker transitions use the host identity (ADR-0010, §5.3).
 - `devvm rm` deletes the VM's network logs and state; Factory ingests what it needs before any removal (§6.6).
@@ -218,7 +218,7 @@ The adapter is a translation and authorization boundary, not a lowest-common-den
 | --- | --- |
 | `capabilities()` | Report read/write fidelity per operation; Factory refuses what the provider cannot do instead of emulating it |
 | `listIssues`, `getIssue` | Intake polling and reconciliation |
-| `createIssue` | One caller in v1: a Failure Policy edge opening a follow-up Issue (§3.6); otherwise the Owner creates Issues in the tracker. The post-v1 Project Assistant adds confirmed assistant-initiated creation (§7.4) |
+| `createIssue` | One caller in v1: a failure edge opening a follow-up Issue (§3.6); otherwise the Owner creates Issues in the tracker. The post-v1 Project Assistant adds confirmed assistant-initiated creation (§7.4) |
 | `updateIssue`, `transitionIssue` | Labels, workflow state, close — **through Factory only** |
 | `assign` / `unassign` | Available; the v1 default graph does not assign agents to Issues |
 | `listComments`, `addComment` | Agents read comments directly via `gh`; comments are Factory-mediated in v1 (and the post-v1 comment plugin), never direct from the VM |
@@ -226,7 +226,7 @@ The adapter is a translation and authorization boundary, not a lowest-common-den
 | `listDependencies`, `addDependency`, `removeDependency` | Available; the v1 default graph does not consume blocking relations |
 | `authorize` | Early UX only; the harness re-checks every mutation immediately before the call |
 
-The adapter exposes more than the default graph consumes (ticket 003): `assign` and dependency operations stay available without being graph inputs. `createIssue` stays in the contract for the one caller v1 has — a Failure Policy edge opening a follow-up Issue (ticket 008) — and the Owner otherwise creates Issues in the tracker; assistant-initiated creation arrives with the post-v1 Project Assistant (§7.4).
+The adapter exposes more than the default graph consumes (ticket 003): `assign` and dependency operations stay available without being graph inputs. `createIssue` stays in the contract for the one caller v1 has — a failure edge opening a follow-up Issue (ticket 008) — and the Owner otherwise creates Issues in the tracker; assistant-initiated creation arrives with the post-v1 Project Assistant (§7.4).
 
 Rules: provider IDs stay opaque; provider-specific fields and events are preserved; unsupported operations are reported, never faked with tags or comments; important writes are verified by reading back (ticket 003).
 
@@ -235,7 +235,7 @@ Rules: provider IDs stay opaque; provider-specific fields and events are preserv
 - Reads: the agent may use `git` and `gh` directly inside the Project VM with the read-only project token.
 - Comments: **Factory-mediated**; v1 may post a summary or blocker on the agent's behalf, and the post-v1 comment plugin lets the agent request a reply. The VM has no issue-write token.
 - Label, state, and close transitions: **Factory tools only**, after the Triage Checkpoint. The agent proposes; Factory records and applies.
-- Merge: not a tracker operation, and not an agent operation (§3.9).
+- Merge: not a tracker operation, and not an agent operation (§3.8).
 
 There are two principals throughout: the provider credential and the harness agent principal. The harness gates every mutation even when the provider credential could perform it (ticket 003).
 
@@ -267,8 +267,9 @@ The default graph keeps the familiar Loop grouping:
 | Triage | `triage` (agent), `decision-shape`/`scope-declared` (gate), `triage-approval` (checkpoint) | Produce and approve a `TriageDecision`; approval creates the Task |
 | Implement | `implement` (agent), `build`/`tests`/`diff-present` (gate) | Implement in the Task worktree; run deterministic gates |
 | Review | `review` (agent wave), `review-verdict` (gate) | Spec-fidelity and adversarial findings; aggregate verdict |
-| PR | `push`/`pr-create` (action), `pr-watch` (trigger), `sync` (action), `rework` (agent) | Host-side push and PR creation; react to base movement, conflicts, and human feedback |
-| Merge | `merge-checkpoint` (checkpoint), `merge` (action), `merged` (terminal) | Owner approval and host-side squash merge |
+| PR | `push`/`pr-create` (action), `pr-watch` (trigger), `sync` (action) | Host-side push and PR creation; react to base movement, conflicts, and human feedback |
+| Rework | `rework` (agent) | Rework on gate failures, review findings, PR feedback, and merge conflicts |
+| Merge | `pr-open`/`checks-green` (gate), `merge-checkpoint` (checkpoint), `merge` (action), `merged` (terminal) | Gate the PR state, take Owner approval, and squash-merge host-side |
 
 The default is data: a project changes its process by editing nodes and edges in a PR, not by asking for engine code. The golden IR asserts every node id, edge, and group. Every node emits the default metric set (§6.4); the artifact may add measures (§4.7). Cycles are allowed only with a bound on at least one edge in the cycle.
 
@@ -322,7 +323,7 @@ An `agent` node declares:
 
 **Implement.** One implementer session in the Task's worktree inside the Project VM. The agent has full agency over the clone: read, write, install, run. It must produce a branch with a commit and diff and may propose the PR title and body. It cannot push or merge: Factory fetches the branch from the VM clone and pushes it with the host identity in the `push` action (ADR-0010, §5.3). The VM token is read-only.
 
-**Review.** A wave of two reviewers — spec-fidelity and adversarial (ticket 008) — produces typed findings: severity (blocking or not), location, claim, and evidence references, plus an approve/request-changes verdict. Findings tagged as misunderstanding feed the Agent Confusion metric (§6.4). The `review-verdict` gate aggregates them deterministically; reviewers do not merge, transition the Issue, or advance the graph.
+**Review.** A wave of two reviewers — spec-fidelity (does the diff do what the approved `TriageDecision` says) and adversarial (what breaks, what is missing, what is unsafe) (ticket 008) — produces typed findings: severity (blocking or not), location (path/line or artifact), claim, and evidence references, plus a verdict of approve or request changes (its schema ships in `.factory/schema/`, §4.1). Findings tagged as misunderstanding feed the Agent Confusion metric (§6.4). The `review-verdict` gate aggregates them deterministically; a failing edge carries the findings as `Feedback` to the `rework` agent node within the D14 budget. Reviewers do not merge, transition the Issue, or advance the graph.
 
 **Rework.** An agent node selecting the implementer entry (or another roster entry in a project's graph) with a typed `Feedback` input. It handles gate failures, review findings, PR feedback, and conflict resolution. It is not a harness node kind; it is a graph node.
 
@@ -339,9 +340,11 @@ A gate never accepts "tests pass" as an agent statement. If a command cannot run
 - `idle-timeout-only` — event silence plus the deadline;
 - `none` — liveness is `unobserved`, never assumed.
 
+**⟨default D13⟩** The liveness defaults are a heartbeat every 15 seconds with 3 consecutive misses allowed, an idle timeout of 5 minutes, and a deadline of 30 minutes; a workflow may override them, and the adapter declares whether a heartbeat exists.
+
 A heartbeat proves the session is reachable, not that it is progressing. Idle timeout catches a live but stuck agent; the Agent Confusion proxies catch one that is busy but thrashing. A missing heartbeat beyond the threshold, an exceeded deadline, or a lost session produces `Stalled`/`Crashed`; the engine interrupts and records the last event, transcript reference, and liveness evidence.
 
-**Feedback loop.** A failure edge can carry a typed `Feedback` artifact into the next agent Run: a gate report, review findings, PR feedback, or the agent outcome. The next Run starts with exactly the evidence of what failed. The default budget is the initial attempt plus two automatic feedback rounds; after that the graph routes to `Blocked` for the Owner. Model fallback inside one entry is separate: the adapter tries the ordered model list within a Run, while an agent retry is a new Run with feedback.
+**Feedback loop.** A failure or stall edge can carry a typed `Feedback` artifact into the next agent Run: a Gate report, review findings, PR feedback, an Agent Outcome, or an Owner note on resume. The next Run starts with exactly the evidence of what failed. **⟨default D14⟩** The default budget is the initial attempt plus two automatic feedback rounds; after the last round the Task is recorded `Blocked` for the Owner. Model fallback inside one entry is separate: the adapter tries the ordered model list within a Run, while an agent retry is a new Run with feedback.
 
 ### 3.6 Gates
 
@@ -367,25 +370,17 @@ A Gate report is a first-class record: gate node id, check, input references wit
 | pr-state | provider | the PR is in the expected state |
 | pr-checks | provider | required checks are green |
 
-**Failure edges and bounds.** A gate's fail outcome is an edge, not a harness policy. The edge may retry the same node, route to an earlier node, open a follow-up Issue through an action, change Issue state, or wait at a checkpoint for the Owner. Every cycle carries a traversal bound; an unbounded cycle is invalid IR (the prototype's validator caught exactly this on its first run — [`prototype/workflow-authoring/`](../../prototype/workflow-authoring/README.md)). The default graph bounds fix rounds at two, then routes to a `Blocked`/Owner checkpoint. Before a Task exists, the same bound parks the **Issue** in the Owner's inbox; it does not create a Task. A failure outside a gate — model exhaustion, a crashed Run, a stall, a missing output — is an edge from the agent node with the same actions and bounds (§3.11). A node with multiple outgoing edges needs a fallback or a reviewed dead-end; the engine blocks with `no_transition` rather than guessing.
+**Failure edges and bounds.** A gate's fail outcome is an edge, not a harness policy. The edge may retry the same node, route to an earlier node, open a follow-up Issue through an action, change Issue state, or wait at a checkpoint for the Owner. Every cycle carries a traversal bound; an unbounded cycle is invalid IR (the prototype's validator caught exactly this on its first run — [`prototype/workflow-authoring/`](../../prototype/workflow-authoring/README.md)). The default graph applies the D14 feedback budget; when it is spent the Task is recorded `Blocked` for the Owner. Before a Task exists, the same bound parks the **Issue** in the Owner's inbox; it does not create a Task. A failure outside a gate — model exhaustion, a crashed Run, a stall, a missing output — is an edge from the agent node with the same actions and bounds (§3.10). A node with multiple outgoing edges needs a fallback or a reviewed dead-end; the engine blocks with `no_transition` rather than guessing.
 
 **Gate integrity.** An agent may edit `.factory/` on its branch, but it cannot loosen the gates it is running under: each Task pins the IR it was created with, including its Agent Roster (§4.8, D3). A change to the artifact takes effect for later Tasks, after review and merge.
 
-### 3.7 Review
-
-The default graph's `review` node is a wave of two reviewers (ticket 008): **spec-fidelity** (does the diff do what the approved `TriageDecision` says) and **adversarial** (what breaks, what is missing, what is unsafe). Wave composition is Workflow data.
-
-Reviewers produce typed artifacts: findings with severity (blocking or not), location (path/line or artifact), claim, and evidence references; plus a verdict of approve or request changes (typed artifact; its schema ships in `.factory/schema/`, §4.1). Findings tagged as misunderstanding feed the Agent Confusion metric (§6.4).
-
-The `review-verdict` gate node aggregates the artifacts deterministically. A failing edge carries the findings as `Feedback` to the `rework` agent node, bounded by the default two rounds. Reviewers do not merge, do not transition the Issue, and do not advance the graph.
-
-### 3.8 PR
+### 3.7 PR
 
 A PR is always required; it is the durable, protected merge surface in v1 (ADR-0003). The `push` action fetches the Task's branch from the VM clone and pushes it with the host identity; the `pr-create` action opens or updates the same PR. The agent may propose the title and body but never pushes or merges. Branch protection on the remote guards the target branch.
 
 An in-thread review with no PR (DeltaDB's model) was considered and not adopted for v1: the pattern of review evidence and verdicts in the work thread is kept, but the PR remains the merge surface (ticket 008, ADR-0003).
 
-**PR feedback.** After `pr-create`, the `pr-watch` trigger polls the Task's open PR and normalizes typed events: `review_changes_requested` from a human, a top-level PR comment from the Owner or a configured reviewer, `base_moved`, `merge_conflict`, and `checks_failed`. Events are deduped by provider id and reconciled on restart; bots and Factory's own comments are ignored by default. The actor filter and routes are Workflow data.
+**PR feedback.** After `pr-create`, the `pr-watch` trigger polls the Task's open PR and normalizes typed events: `review_changes_requested` from a human, a top-level PR comment from the Owner or a configured reviewer, `base_moved`, `merge_conflict`, and `checks_failed`. Events are deduped by provider id and reconciled on restart. **⟨default D15⟩** The poll interval is configurable, actionable actors are the Owner and a configured reviewer allowlist, bots and Factory's own comments are ignored, and inline replies are deferred. The actor filter and routes are Workflow data.
 
 - A human `CHANGES_REQUESTED` or Owner/reviewer comment routes to the `rework` agent node with a typed `Feedback` artifact carrying the review state, comment bodies, inline path/line context, and the PR head.
 - `base_moved` routes to the `sync` action; a clean sync reruns the affected gates, and a conflict routes to `rework` with the conflict evidence.
@@ -394,14 +389,14 @@ An in-thread review with no PR (DeltaDB's model) was considered and not adopted 
 
 The VM has no issue-write token, so the agent does not reply in the PR. Factory may post a summary (“addressed in `<sha>`”) with the host identity; inline agent replies are the post-v1 comment plugin. A waiting `merge-checkpoint` also accepts PR events, so new feedback interrupts it instead of leaving a stale approval pending.
 
-**Evidence is bound to the head.** Every gate report and the merge Checkpoint reference the PR head commit. A push after the gates pass, or after the Owner approves, invalidates both: the Task routes back to the affected gates and, if the approval is stale, to a fresh merge Checkpoint. A merge is refused unless the PR head still equals the approved head, and the merge request itself is conditioned on that SHA rather than merely checked before it. The merge Checkpoint's `expect` also pins a feedback digest, so a new actionable review/comment invalidates the approval even when the head has not moved.
+**Evidence is bound to the head.** Every Gate report and the merge Checkpoint reference the PR head commit. A push after the gates pass, or after the Owner approves, invalidates both: the Task routes back to the affected gates and, if the approval is stale, to a fresh merge Checkpoint. A merge is refused unless the PR head still equals the approved head, and the merge request itself is conditioned on that SHA rather than merely checked before it. The merge Checkpoint's `expect` also pins a feedback digest, so a new actionable review/comment invalidates the approval even when the head has not moved.
 
-### 3.9 Merge
+### 3.8 Merge
 
 The merge is an Owner checkpoint node followed by a merge action:
 
 1. Every gate in Implement and Review has passed; the `push`/`pr-create` actions have opened the PR.
-2. The merge group's gate nodes (`pr-open`, `checks-green`) pass; the Owner receives the PR and the gate report at the **`merge-checkpoint` node**.
+2. The merge group's gate nodes (`pr-open`, `checks-green`) pass; the Owner receives the PR and the Gate report at the **`merge-checkpoint` node**.
 3. Factory serializes merges per Managed Project. Before merging it verifies that the PR head still equals the head the gates and the checkpoint approved, and that the feedback digest has not changed; a mismatch refuses the merge and routes the Task to the affected gates or `rework`.
 4. If the base moved and the branch must be updated, the `sync` action applies it. A clean sync that changes the head invalidates the approval and routes to a fresh checkpoint; a conflict routes to `rework`.
 5. On approval and a matching head, **Factory** executes a **squash merge via `gh`** on the daemon host, using the host's identity, **conditioned on the approved head** (`--match-head-commit`), including on retries after reconciliation; a provider that cannot express the condition blocks the Task instead of merging. Factory records the merge commit.
@@ -413,7 +408,7 @@ Agents never run the merge: the capability is Factory's, and the remote's branch
 
 Post-merge monitoring is post-v1; the Managed Project's own CI takes over from the merged commit (ticket 008, ticket 018).
 
-### 3.10 Concurrency and scheduling
+### 3.9 Concurrency and scheduling
 
 Concurrency is a Workflow setting per Managed Project: the maximum number of in-flight Tasks; v1 defaults to **1** and supports values above it **⟨default D17⟩** (ticket 008, ADR-0010).
 
@@ -421,24 +416,24 @@ Concurrency is a Workflow setting per Managed Project: the maximum number of in-
 
 At concurrency 1, a single working copy in the Project VM is sufficient. Above 1, each Task gets its own `git worktree` on a unique branch inside the same Project VM (D4); a separate clone is the fallback when a worktree cannot be used. The VM boundary stays per Managed Project (§2.5, §5.8).
 
-**Merge queue.** Merges are serialized per Managed Project. The merge action re-checks the approved head, the base, and the feedback digest inside its transaction. A base update that changes the head invalidates the approval and routes to a fresh checkpoint; a conflict routes to `rework`. Two approved Tasks never merge concurrently.
+**Merge queue.** **⟨default D16⟩** Merges are serialized per Managed Project. The merge action re-checks the approved head, the base, and the feedback digest inside its transaction. A base update that changes the head invalidates the approval and routes to a fresh checkpoint; a conflict routes to `rework`. Two approved Tasks never merge concurrently.
 
 **Abandon and cancellation.** `task.abandon` on an in-flight Task interrupts the active agent or action, stops its processes, records the evidence, and removes the worktree after the branch is no longer needed. The Issue disposition is the recorded decision. A Task cannot be abandoned and dispatched in the same window; the transition is serialized.
 
 **Resource contention.** Worktrees isolate files and branches, not build caches, ports, databases, or CPU. A project whose test suite needs exclusive services keeps `concurrency` at 1; optional per-node exclusivity is post-v1. The daemon records queue wait, active count, and VM resource pressure so the Owner can see when concurrency is hurting.
 
-### 3.11 Blocked, failures, abandonment
+### 3.10 Blocked, failures, abandonment
 
 Blocked is a Task state with evidence: what failed, which node and edge, what was tried, the feedback history, and what the Owner must decide. It appears in the Owner's inbox. Resuming a Blocked Task is an Owner action recorded as a transition; `task.resume` may carry an Owner note that becomes input to the resumed Run.
 
 | Failure | Handling |
 | --- | --- |
-| Gate failure | The failing edge routes with the Gate report as `Feedback`; the default bound is two rounds, then Blocked |
-| Agent `Incomplete` | Required outputs missing; automatic retry with the missing-output evidence |
-| Agent `Stalled` / `Crashed` | Heartbeat/idle/deadline or session failure; interrupt, record last event and transcript ref, automatic retry |
-| Agent `Exhausted` | The adapter tried every model in the entry's ordered list; the edge decides retry, a different roster entry, follow-up, Issue state, or Blocked |
+| Gate failure | The failing edge routes with the Gate report as `Feedback`; the D14 budget applies, then the Task is recorded `Blocked` |
+| Agent `Incomplete` | Required outputs missing; automatic retry with the missing-output evidence as `Feedback` |
+| Agent `Stalled` / `Crashed` | Heartbeat/idle/deadline or session failure; interrupt, record last event and transcript ref, automatic retry with the stall evidence as `Feedback` |
+| Agent `Exhausted` | The adapter tried every model in the entry's ordered list; the edge decides retry, a different roster entry, follow-up, Issue state, or the Task is recorded `Blocked` |
 | Agent `Blocked` / `Refused` | Self-reported blocker or model refusal; route to a checkpoint/blocker or retry with feedback, never silently continue |
-| No-progress | Agent Confusion proxies crossed their threshold; the event edge routes to rework or Blocked |
+| No-progress | Agent Confusion proxies crossed their threshold; the event edge routes to rework, or the Task is recorded `Blocked` |
 | PR feedback | Human `CHANGES_REQUESTED` or Owner/reviewer comment; route to rework with the feedback artifact, bounded |
 | Base moved / merge conflict | `sync` action; clean sync reruns gates, conflict routes to rework |
 | Pre-Task triage failure | Recorded against the Issue; retry within the triage node or wait for the Owner; no Task is created |
@@ -447,9 +442,9 @@ Blocked is a Task state with evidence: what failed, which node and edge, what wa
 | Egress block needing a decision | Egress Request to the Owner (§5.6); on a decision the rule is applied locally and recorded, and the Task resumes per the routed edge |
 | Secret denial | Recorded with host and reason; the Task blocks or retries per policy; never bypassed |
 
-Abandonment is an Owner decision with a reason; the Issue is left open with a comment or closed, per that decision. Abandoning an in-flight Task interrupts the active agent or action and removes its worktree (§3.10).
+Abandonment is an Owner decision with a reason; the Issue is left open with a comment or closed, per that decision. Abandoning an in-flight Task interrupts the active agent or action and removes its worktree (§3.9).
 
-### 3.12 Reconcile-and-resume
+### 3.11 Reconcile-and-resume
 
 On start, the daemon loads the latest snapshot, replays the log suffix, and reconciles with the world before resuming anything (ADR-0005):
 
@@ -505,7 +500,7 @@ workflow.dhall + roster.dhall + envelope.dhall + bindings.dhall + schema/
 Rules:
 
 - **No effects in Dhall.** A Dhall expression may build the graph; it may never call a host effect (ticket 011, ADR-0010).
-- **Finite graphs.** Dhall has no general recursion. Runtime iteration is an explicit bounded edge cycle or a `ForEach` node over a prior typed output, with a declared bound and an engine-persisted cursor (ticket 011). A cycle without a bound is invalid IR.
+- **Finite graphs.** Dhall has no general recursion. Runtime iteration is an explicit bounded edge cycle, with a declared bound and an engine-persisted cursor (ticket 011, ADR-0010). A cycle without a bound is invalid IR.
 - **CEL for guards only.** Guards are typed, side-effect-free, terminating expressions evaluated by the engine (ticket 011).
 - **IR is the contract.** The engine executes the node/edge IR, not Dhall. The IR is versioned independently of the Dhall standard (ticket 011, ADR-0006, ADR-0010).
 - **Roster is compiled, not looked up.** Roster Entries and their ordered model lists compile into the IR; the engine never reads a separate roster or model-selection configuration beside the artifact, and the operational local devvm config (ADR-0009) is applied at the VM boundary, not read as workflow configuration. Each entry's ordered list lives in `bindings.dhall` (ADR-0007, ADR-0008); Project Init writes it, the roster entry that consumes it compiles it into the IR, so the list the engine selects from is the roster's. Model-list validity is a compile check; model availability is a dispatch-time fact.
@@ -527,9 +522,11 @@ Top-level fields the IR must express (ADR-0010; the prototype is evidence only �
 | Nodes | id, kind (`agent`, `gate`, `checkpoint`, `action`, `trigger`, `route`, `terminal`), typed config, optional `group`, optional `measures`, optional `maxVisits` |
 | Agent contract | wave of roster entry ids, required outputs, deadline, idle timeout, heartbeat, optional event edges |
 | Gate contract | check class + parameters, pass/fail edges |
-| Checkpoint contract | asked artifacts, decision edges |
+| Checkpoint contract | asked artifacts, optional `expect` (approved head SHA + feedback digest), decision and event edges |
 | Action contract | action type from the closed registry, parameters, success/failure/conflict edges |
 | Trigger contract | event source and match, actor guard, target edges, optional timeout |
+| Route contract | pure CEL expression, decision edges |
+| Terminal contract | disposition (`merged`, `abandoned`, `failed`), terminal edges |
 | Edges | id, `from`, `to`, `on` (`success`, `failure`, `event`, `decision`, `timeout`, `always`), optional CEL `guard`, optional `maxTraversals` |
 | Node identity | every node has a stable id; its path is `workflowId + nodeId`; `group` is display metadata, not identity |
 | Termination | every cycle has at least one bounded edge; every terminal is reachable; every non-terminal has a route or a reviewed dead-end |
@@ -583,6 +580,8 @@ The compiler and IR validator reject:
 - an unknown node kind, gate check class, action type, trigger event type, or decision value;
 - a node with no route when its outcome is reachable, unless the node is a terminal or the dead-end is explicitly reviewed;
 - a cycle with no bounded edge;
+- a graph with no terminal node, or a terminal unreachable from the entry node;
+- a checkpoint `expect` naming an unknown head or an unknown feedback digest;
 - an agent wave naming no Roster Entry, or an entry missing its role or persona;
 - an agent node with an empty or unknown required output, or a liveness contract that cannot hold (`heartbeat` not below `idleTimeout`, `idleTimeout` not below `deadline`, or a claimed heartbeat from an adapter that does not declare it);
 - a checkpoint asking for an artifact no upstream node produces;
@@ -595,7 +594,6 @@ The compiler and IR validator reject:
 - an entry whose policy reference does not resolve to the project policy (the Project Envelope in v1; a Capability Profile post-v1);
 - a measure id that is not a built-in semantic key (§6.4);
 - a `bindings.dhall` with missing or malformed provenance: an `irVersion` the engine does not know, or a value that is not a well-formed `sha256:<hex>` content digest (§4.6);
-- a `ForEach` without a bound;
 - concurrency below 1;
 - a second Workflow definition in v1.
 
@@ -959,7 +957,7 @@ The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later
 | R5 | Secret injection does not cover git-over-SSH; CA expiry; minting gaps | VM git-over-SSH reads fail; requests fail closed; credential grants | HTTPS remotes; host-side push uses the host identity; read-only project token in the VM; CA expiry is an operational check; rotate after distrust (ticket 017, ADR-0010) |
 | R6 | Runaway spend; no budget or cap in v1 | Cost, not correctness | Cost tracked when the adapter reports usage; visible in metrics; no `budget` field; the allowlist bounds egress; a cap is post-v1 (ADR-0004, ADR-0009) |
 | R7 | Self-hosting bootstrap is circular | Factory cannot build itself without itself | Manual initial build; Subproject one after handover; feedback as Issues (ticket 008) |
-| R8 | Gate integrity: an agent edits the artifact or claims a verdict; evidence outlives its head | Ungated advancement; merging unreviewed content | IR (including the Agent Roster) pinned per Task; gate nodes read durable facts; head- and feedback-bound evidence, compare-and-merge, serialized merge queue (§3.8–3.10); artifact edits are PRs (ticket 014, ADR-0003, ADR-0007, ADR-0010) |
+| R8 | Gate integrity: an agent edits the artifact or claims a verdict; evidence outlives its head | Ungated advancement; merging unreviewed content | IR (including the Agent Roster) pinned per Task; gate nodes read durable facts; head- and feedback-bound evidence, compare-and-merge, serialized merge queue (§3.7–3.9); artifact edits are PRs (ticket 014, ADR-0003, ADR-0007, ADR-0010) |
 | R9 | One daemon, one Owner, no multi-user auth | Local compromise; no team use | Unix socket with a scoped Owner session; one writer; one credential owner; multi-client auth deferred (ADR-0005) |
 | R10 | Evidence loss when a Project VM is removed | Forensics and mining gaps | Ingest network logs and export transcripts before `devvm rm`; refs and digests live in Factory (ticket 004, ticket 017) |
 | R11 | Polling intake latency and provider rate limits | Slow admission; throttling | Configurable interval; idempotent intake; webhooks post-v1 (ADR-0005) |
@@ -968,7 +966,7 @@ The 0.1.1 line was at `0.1.1-rc.3` when researched; the pin is to 0.1.1 or later
 | R14 | 17-VM cap / per-VM memory if usage grows | Queueing at scale | Per-Run VMs stay an escalation; capacity is measured (§2.5, R3; ticket 017) |
 | R15 | Transcript/runtime state inside the VM is the only copy | Loss on VM replacement; runtime lock-in | Factory keeps Task context, artifacts, diffs, and handoff summaries outside the runtime so a Task can resume with a fresh session (ticket 002) |
 | R16 | Node/edge graph is more expressive than a stage table | Authoring complexity; a validator that misses a dead end or unbounded cycle | Small closed primitive set; bounded cycles; entry/terminal/edge validation; default graph as the proof; prototype/golden IR tests (ADR-0010) |
-| R17 | Agents stall, stop silently, or return incomplete work | Tasks hang or "finish" without the work | Typed Agent Outcomes; declared liveness with idle/deadline fallback; required outputs; Gate/review feedback edges; two automatic feedback rounds then Blocked (ADR-0010) |
+| R17 | Agents stall, stop silently, or return incomplete work | Tasks hang or "finish" without the work | Typed Agent Outcomes; declared liveness with idle/deadline fallback; required outputs; Gate/review feedback edges; the D14 feedback budget then `Blocked` (ADR-0010) |
 | R18 | Concurrent Tasks share one Project VM | Build/test port, cache, CPU, and database contention | Per-Task worktrees; concurrency 1 for projects with exclusive services; queue and resource metrics; per-Run VM remains an escalation (ADR-0010, ticket 017) |
 | R19 | PR polling rate limits and feedback storms | Missed or duplicated feedback; rework loops | Provider-id dedupe, actor allowlist, ETag/since cursors, bounded rework rounds, bots ignored by default (ADR-0010) |
 | R20 | Merge queue and base movement invalidate approvals | Stale merges or repeated Owner approvals | Serialized merge queue; head + base + feedback digest checks inside the merge transaction; base update routes to sync/rework and a fresh checkpoint (ADR-0010) |
@@ -1019,10 +1017,10 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 
 | # | Default | Where |
 | --- | --- | --- |
-| D1 | Admission order: Issue creation time, then number | §3.10 |
-| D2 | A denied merge routes to `rework` with the reason; the Workflow declares the denial/abandon split | §3.9 |
+| D1 | Admission order: Issue creation time, then number | §3.9 |
+| D2 | A denied merge routes to `rework` with the reason; the Workflow declares the denial/abandon split | §3.8 |
 | D3 | Each Task pins its `workflowId`, IR version, and digest at creation, including the Agent Roster | §4.8 |
-| D4 | Concurrency above 1 gives each Task its own `git worktree` in the VM, with a separate clone as fallback | §2.5, §3.10 |
+| D4 | Concurrency above 1 gives each Task its own `git worktree` in the VM, with a separate clone as fallback | §2.5, §3.9 |
 | D5 | Metric thresholds are recorded configuration | §6.4 |
 | D6 | The Owner restarts the daemon after a self-merged change | §7.2 |
 | D7 | The `developer` preset is a named adapter/devvm set; its host list is build-time data seeded from the prototype | §4.4 |
@@ -1033,9 +1031,9 @@ Every **⟨default Dn⟩** in the body is listed here; the D-id is the stable ke
 | D12 | Content digest: SHA-256 over the default's source set, sorted by path, LF-normalized | §4.6 |
 | D13 | Agent liveness defaults: heartbeat every 15s with 3 misses, idle timeout 5m, deadline 30m; the workflow may override, and the adapter declares whether heartbeat exists | §2.4, §3.5 |
 | D14 | Feedback budget: the initial attempt plus two automatic feedback rounds, then Blocked; model fallback inside one entry is separate | §3.5, §3.6 |
-| D15 | PR feedback defaults: poll interval configurable; actionable actors are the Owner and a configured reviewer allowlist; bots and Factory comments ignored; inline replies deferred | §3.8 |
-| D16 | Merge queue: one merge at a time per Managed Project; a base update that changes the head requires a fresh merge Checkpoint | §3.9, §3.10 |
-| D17 | Concurrency defaults to 1 and is configurable per Managed Project; a waiting Task counts against the cap | §3.10 |
+| D15 | PR feedback defaults: poll interval configurable; actionable actors are the Owner and a configured reviewer allowlist; bots and Factory comments ignored; inline replies deferred | §3.7 |
+| D16 | Merge queue: one merge at a time per Managed Project; a base update that changes the head requires a fresh merge Checkpoint | §3.8, §3.9 |
+| D17 | Concurrency defaults to 1 and is configurable per Managed Project; a waiting Task counts against the cap | §3.9 |
 
 ---
 
@@ -1057,13 +1055,13 @@ The spec's first version recorded nine conflicts between the map, the glossary, 
 | I10 | I9 and ADR-0002 placed runtime configuration in a separate Factory-managed artifact outside `.factory/` | The Agent Roster is project-owned, lives in `.factory/roster.dhall`, and compiles into the IR; Factory validates it against the Model Catalog and stores no secret values (ADR-0007) | [`CONTEXT.md`](../../CONTEXT.md), [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) |
 | I11 | The default Workflow Artifact was referenced nine times with no address; §1.5 #6 had no subject | The default is a versioned deliverable in `defaults/`, rendered into a project by Project Init, with a fixture golden IR and content-digest provenance (ADR-0008). Init's write of provider names and endpoints moves from `envelope.dhall` to `bindings.dhall`, superseding ADR-0007's clause. Superseded in part by I12: provider endpoints are local config, not bindings | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`defaults/README.md`](../../defaults/README.md), [`CONTEXT.md`](../../CONTEXT.md) |
 | I12 | I7 persisted egress approvals as artifact PRs; the Envelope carried the allowlist, secret scopes, and `budget` | The artifact carries the containment contract (tier, preset, `extra_allow`, secret names); local devvm config carries the full allowlist, provider endpoints, and secret scopes; Egress decisions are recorded in SQLite; `budget` is removed (ADR-0009) | [`ADR-0004`](../adr/0004-containment-first-capability-model.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0008`](../adr/0008-default-artifact-deliverable.md), [`ADR-0009`](../adr/0009-containment-contract-local-config.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
-| I13 | The IR was stage-centric: a Stage bundled a wave, gates, a checkpoint, and an action, and the engine implicitly advanced | The core primitive is Node + Edge; the engine executes nodes and evaluates edges; Stage is a display group. `Rework` and `sync` are ordinary graph nodes/actions, not harness node kinds (ADR-0010) | [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md) |
-| I14 | The spec gave agents direct reads, comments, and pushes with a project-scoped token | The Project VM token is read-only (contents/issues/PRs/metadata reads); pushes, PR creation, merge, tracker transitions, and comments use the host identity. Comments are Factory-mediated in v1 and the agent comment plugin is post-v1 (ADR-0010) | [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md) |
-| I15 | Concurrency and human PR feedback were not v1 behaviors | v1 supports configurable concurrency with per-Task worktrees and a serialized merge queue, and a `pr-watch` trigger routes human review/comments, base movement, and conflicts to `sync`/`rework` (ADR-0010) | [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md) |
+| I13 | The IR was stage-centric: a Stage bundled a wave, gates, a checkpoint, and an action, and the engine implicitly advanced | The core primitive is Node + Edge; the engine executes nodes and evaluates edges; Stage is a display group. `Rework` and `sync` are ordinary graph nodes/actions, not harness node kinds (ADR-0010) | [`ADR-0003`](../adr/0003-v1-issue-driven-loop.md), [`ADR-0006`](../adr/0006-dhall-authoring-factory-directory.md), [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md), [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md), [`defaults/README.md`](../../defaults/README.md), [`prototype/workflow-authoring/README.md`](../../prototype/workflow-authoring/README.md) |
+| I14 | The spec gave agents direct reads, comments, and pushes with a project-scoped token | The Project VM token is read-only (contents/issues/PRs/metadata reads); pushes, PR creation, merge, tracker transitions, and comments use the host identity. Comments are Factory-mediated in v1 and the agent comment plugin is post-v1 (ADR-0010) | [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md), [`map.md`](../wayfinding/map.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md) |
+| I15 | Concurrency and human PR feedback were not v1 behaviors | v1 supports configurable concurrency with per-Task worktrees and a serialized merge queue, and a `pr-watch` trigger routes human review/comments, base movement, and conflicts to `sync`/`rework` (ADR-0010) | [`ADR-0010`](../adr/0010-node-edge-workflow-core.md), [`CONTEXT.md`](../../CONTEXT.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md) |
 
 One wording distinction, not a conflict: ADR-0003 lists PR among the Loop's steps; the spec treats PR creation as a typed `action` node after Review, with gate evaluation inside gate nodes (§3.1).
 
-I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md). I12 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md), [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md), and [`closed/017`](../wayfinding/closed/017-research-devvm-sandboxing.md).
+I10 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md). I12 also annotates the superseded wording in [`map.md`](../wayfinding/map.md) and [`closed/006`](../wayfinding/closed/006-decide-harness-substrate.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md), [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md), and [`closed/017`](../wayfinding/closed/017-research-devvm-sandboxing.md). I13–I15 annotate the superseded wording in [`map.md`](../wayfinding/map.md), [`closed/008`](../wayfinding/closed/008-shape-the-issue-driven-loop.md), [`closed/009`](../wayfinding/closed/009-decide-capability-control-model.md), and [`closed/016`](../wayfinding/closed/016-shape-workflow-authoring-ergonomics.md); the same revision amends [`ADR-0002`](../adr/0002-opencode-as-first-runtime-adapter.md) (exhaustion to the agent node, adapter liveness) and [`ADR-0007`](../adr/0007-agent-roster-in-workflow-artifact.md) (agent nodes select entries; failures route on edges).
 
 ---
 

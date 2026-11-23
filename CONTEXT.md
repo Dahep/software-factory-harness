@@ -41,7 +41,7 @@ The typed, declarative graph of nodes and edges a Task moves through in a Manage
 _Avoid_: pipeline, script, automation
 
 **Task**:
-A unit of work admitted into a Workflow graph, derived from a tracker Issue and owned by Factory until it is merged or abandoned.
+A unit of work admitted into a Workflow graph, derived from a tracker Issue and owned by Factory until it is merged, abandoned, or failed.
 _Avoid_: ticket, job, item
 
 **Issue**:
@@ -85,7 +85,7 @@ The typed result of an agent session: Completed, Incomplete, Stalled, Crashed, E
 _Avoid_: status, result
 
 **Feedback**:
-A typed artifact carried on an edge into an agent node — a Gate report, review findings, PR feedback, or an agent outcome — so the next Run starts with the evidence of what failed.
+A typed artifact carried on an edge into an agent node, or on a resume — a Gate report, review findings, PR feedback, an Agent Outcome, or an Owner note — so the next Run starts with the evidence of what failed.
 _Avoid_: advice, retry prompt
 
 **Session Liveness**:

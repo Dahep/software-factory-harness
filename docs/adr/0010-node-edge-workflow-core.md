@@ -2,7 +2,7 @@
 
 A Workflow's core primitive is the **Node**, connected by **Edges**. The engine executes nodes and evaluates edges; it does not execute Stages. The default issue-driven Loop is one graph in `defaults/`, not engine logic. A **Stage** survives only as a `group` label on nodes for display, metrics, and the later Node View.
 
-A Node has a stable `id`, a `kind`, typed `config`, an optional `group`, optional `measures`, and an optional visit bound. An Edge has `from`, `to`, an `on` condition (`success`, `failure`, `event`, `decision`, `timeout`, or `always`), an optional CEL `guard`, and an optional traversal bound. Only one outgoing edge is taken; edges are evaluated in declaration order and the first match wins. A Task starts at exactly one `entry` node and ends at a terminal node.
+A Node has a stable `id`, a `kind`, typed `config`, an optional `group`, optional `measures`, and an optional visit bound. An Edge has `from`, `to`, an `on` condition (`success`, `failure`, `event`, `decision`, `timeout`, or `always`), an optional CEL `guard`, and an optional traversal bound. Only one outgoing edge is taken; edges are evaluated in declaration order and the first match wins. A Task starts at exactly one designated entry node and ends at a terminal node.
 
 The primitive node kinds are `agent`, `gate`, `checkpoint`, `action`, `trigger`, `route`, and `terminal`.
 
@@ -39,10 +39,10 @@ v1 remains one Workflow definition per Managed Project. The IR carries a `workfl
 
 - `docs/spec/SPEC.md` §3 and §4 are rewritten around nodes and edges; the default Loop is a graph; Task states are generic; Gate failure policies become bounded edges.
 - The IR shape changes: `entry`, `nodes`, `edges`, `workflowId`, and edge bounds replace stage-scoped Waves, Gates, checkpoints, and failure policies.
-- `defaults/` and the prototype/golden IR are rewritten as a graph; the old prototype remains evidence only.
+- `defaults/`'s Dhall and golden IR are authored as a graph in build step 1; the prototype's stage-centric IR stays as evidence and is not rewritten.
 - Agent completion and liveness become part of the RuntimeAdapter and agent-node contract: a declared `liveness` capability, typed outcomes, heartbeat/idle/deadline detection, and typed feedback into retries.
 - Concurrency above one and PR feedback become v1 features of the default graph; the merge queue and stale-approval rule are specified.
-- The Client API's `workflow.get` returns the graph, `task.get` returns `currentNode` and generic state, and no `rework` or `sync` operation exists.
+- The future Client API decision inherits this shape: `workflow.get` returns the graph, `task.get` returns `currentNode` and generic state, and no `rework` or `sync` operation exists.
 - ADR-0006 is amended: the typed declarative graph is now a node/edge graph, and Stage is a display group.
 
 Status: accepted 2026-11-22 (Owner design decision; review record: PR #7).

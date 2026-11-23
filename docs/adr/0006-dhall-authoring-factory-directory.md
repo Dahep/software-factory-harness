@@ -1,13 +1,13 @@
 # Workflows are authored in Dhall inside a committed `.factory/` directory
 
-Factory's Workflow Artifact is a `.factory/` directory committed in each Managed Project: `workflow.dhall` (stages, waves, gates and their failure policies, checkpoints), `roster.dhall` (the Agent Roster: entries, ordered model lists, policies, declared requirements), `bindings.dhall` (Project Init data: models per seat, build/test commands, provider and secret names, and provenance), `envelope.dhall` (clone mode, network tier and named network preset, optional stable `extra_allow`, and secret names), and `schema/` (the Dhall types). The Go engine evaluates Dhall with `dhall-golang` and compiles it to a versioned IR; the IR — not Dhall — is the contract the engine executes. `devvm` secret values never appear in the artifact: the envelope names secrets, the host holds the values, bindings are per Project VM. Project Init renders the default artifact from `defaults/` through a PR; later deviations are PRs against the project's copy. Per-stage metric declarations are optional because a default metric set applies to every run.
+Factory's Workflow Artifact is a `.factory/` directory committed in each Managed Project: `workflow.dhall` (nodes, edges, gates, checkpoints), `roster.dhall` (the Agent Roster: entries, ordered model lists, policies, declared requirements), `bindings.dhall` (Project Init data: models per seat, build/test commands, provider and secret names, and provenance), `envelope.dhall` (clone mode, network tier and named network preset, optional stable `extra_allow`, and secret names), and `schema/` (the Dhall types). The Go engine evaluates Dhall with `dhall-golang` and compiles it to a versioned IR; the IR — not Dhall — is the contract the engine executes. `devvm` secret values never appear in the artifact: the envelope names secrets, the host holds the values, bindings are per Project VM. Project Init renders the default artifact from `defaults/` through a PR; later deviations are PRs against the project's copy. Per-node metric declarations are optional because a default metric set applies to every run.
 
 ## Considered Options
 
 - **YAML + JSON-Schema frontend** — prototyped (`prototype/workflow-authoring/`) and readable, with a working validator; rejected for v1 because the owner chose Dhall's author-time typing, with the YAML sketch kept as documentation of the road not taken.
 - **Raw JSON IR authoring** — rejected: worst review and edit ergonomics.
 - **Inheritance (`extends` + overrides)** — rejected: copy-on-init with PR-only deviation keeps one authoritative artifact per project and needs no merge semantics.
-- **Mandatory per-stage metrics** — rejected: the default metric set plus optional extras keeps the directive without validation friction.
+- **Mandatory per-node metrics** — rejected: the default metric set plus optional extras keeps the directive without validation friction.
 
 ## Consequences
 
