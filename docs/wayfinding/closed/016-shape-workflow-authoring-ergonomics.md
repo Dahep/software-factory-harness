@@ -38,3 +38,5 @@ Deliverable: a prototype artifact (rough loop definitions in the top two candida
 **Amendment (2026-11-20).** Item 2's `.factory/` also carries `bindings.dhall` and is rendered from the Default Workflow Artifact in `defaults/`, which ships a fixture golden IR and a content digest (ADR-0008). Item 4's copy-on-init answer stands, with one boundary that decision fixed: the two lifecycle labels (`needs-triage`, `ready-for-agent`) are the whole v1 label set, so renaming label or workflow-state names is post-v1 rather than a copy deviation.
 
 **Amendment (2026-11-20, ADR-0009).** Item 2's `envelope.dhall` carries the containment contract — clone mode, network tier and named preset, optional `extra_allow`, secret names — not the full allowlist, provider endpoints, secret scopes, or a `budget`; the allowlist, endpoints, and scopes are local devvm config, and the budget field is removed.
+
+**Superseded in part (2026-11-22, ADR-0010).** Measures are declared per node, not per stage group; the prototype's stage-centric IR stays evidence and is not the current IR contract (I13).

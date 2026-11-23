@@ -4,6 +4,8 @@
 
 This directory is a prototype. Nothing here ships.
 
+**Superseded for the IR shape.** ADR-0010 makes the core primitive Node + Edge; this prototype's stage-centric IR is kept as evidence for authoring ergonomics and the unbounded-`returnTo` catch, not as the current IR contract.
+
 ## What to look at
 
 | File | What it is |

@@ -8,7 +8,7 @@ The Dhall files and `fixtures/golden.ir.json` are authored in build step 1. This
 
 ```
 defaults/
-  workflow.dhall           # stages, waves, gates and failure policies, checkpoints, actions, measures
+  workflow.dhall           # node/edge graph: agent, gate, checkpoint, action, trigger, route, terminal; bounds, measures
   roster.dhall             # Agent Roster: four entries; model lists come from bindings
   envelope.dhall           # clone mode, network tier and preset, optional extra_allow, secret names
   bindings.example.dhall   # the init surface, with placeholder values
@@ -51,10 +51,11 @@ The Envelope carries the containment **contract**: clone mode, network tier, a n
 
 ## Vocabulary owned here
 
-- **Metric keys.** Every measure id is one of the spec's §6.4 built-in semantic keys: `stage.cycle_time`, `gate.verdict`, `review.findings`, `run.retries`, `run.tokens`, `run.cost`, `model.resolution`, `pr.merge_latency`, `tool.error_rate`, `agent.confusion_proxies`. v1 adds no custom semantic keys.
+- **Metric keys.** Every measure id is one of the spec's §6.4 built-in semantic keys: `node.cycle_time`, `gate.verdict`, `review.findings`, `run.retries`, `run.tokens`, `run.cost`, `model.resolution`, `agent.outcomes`, `agent.liveness`, `agent.feedback_rounds`, `pr.feedback_rounds`, `pr.merge_latency`, `merge.queue_wait`, `tool.error_rate`, `agent.confusion_proxies`. v1 adds no custom semantic keys.
 - **Labels.** The default label set is the only set in v1: the intake label `needs-triage` and the post-approval `ready-for-agent` label. Renaming and additions are post-v1.
-- **Node ids.** Every Stage, Gate, Checkpoint, action, and agent entry has a stable id; the golden IR asserts the node paths. The post-v1 Node View groups Runs, events, artifacts, and Gate reports under them.
+- **Node ids.** Every node has a stable id and kind; its path is `workflowId + nodeId`. `Stage` is a display group, not an execution unit. The golden IR asserts node ids, edges, groups, and the entry/terminal nodes. The post-v1 Node View groups Runs, events, artifacts, and Gate reports under them.
+- **Graph.** Every cycle has a bounded edge; the default graph includes the two-round feedback bound, the merge queue, the `pr-watch` trigger, and the `sync`/`rework` nodes. v1 carries one Workflow definition per Managed Project.
 
 ## Not here
 
-The prototype under `prototype/workflow-authoring/` is evidence for authoring ergonomics, not a source for this directory. Do not lift its YAML, schema, or IR: its schema requires measures on every Stage, contradicting the spec's §4.7, and its Dhall was never compiled.
+The prototype under `prototype/workflow-authoring/` is evidence for authoring ergonomics, not a source for this directory. Do not lift its YAML, schema, or IR: its schema requires measures on every stage group, contradicting the spec's §4.7, its IR is stage-centric rather than node/edge (ADR-0010), and its Dhall was never compiled.

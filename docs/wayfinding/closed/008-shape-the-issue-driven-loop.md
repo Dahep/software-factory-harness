@@ -29,3 +29,5 @@ Context pointer (2026-11-03): [Study Zed's DeltaDB](014-research-deltadb-operati
 Glossary terms crystallised into `CONTEXT.md`: Gate (+ Failure Policy), TriageDecision, Workflow Artifact, Project Init, Agent Confusion.
 
 **Amendment (2026-11-19).** Item 6's "runtime configuration" is the project-owned Agent Roster in `.factory/roster.dhall` (ADR-0007), compiled into the IR; the init PR renders the roster's primary models and writes secret names, never values.
+
+**Superseded in part (2026-11-22, ADR-0010).** Items 1 and 3 describe Stages as execution units: the core primitive is now Node + Edge, Stage is a display group, and a gate's failure policy is a bounded edge. Item 5's concurrency now supports values above 1 with a per-Task worktree and a serialized merge queue. Item 7's per-Stage cycle time is `node.cycle_time`, and PR review/comment events and feedback rounds join the measure set (I13, I15).
